@@ -25,7 +25,6 @@ def ensure_dirs():
 ensure_dirs()
 
 
-# ---------- USERS ----------
 def load_users():
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, "r", encoding="utf-8") as f:
@@ -48,13 +47,11 @@ def get_role(username: str) -> str:
     return users[username]["role"]
 
 
-# ---------- MODEL ----------
 @st.cache_resource
 def get_model():
     return YOLO("best.pt")
 
 
-# ---------- DB ----------
 def get_connection():
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
 
@@ -125,7 +122,6 @@ def delete_inspection(row_id: int):
     con.close()
 
 
-# ---------- SAVE IMAGES ----------
 def save_images(original_pil: Image.Image, annotated_bgr: np.ndarray, prefix: str):
     ensure_dirs()
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -140,7 +136,6 @@ def save_images(original_pil: Image.Image, annotated_bgr: np.ndarray, prefix: st
     return str(original_path), str(annotated_path)
 
 
-# ---------- HEATMAP ----------
 def build_heatmap(img_shape, boxes_xyxy):
     h, w = img_shape[:2]
     heat = np.zeros((h, w), dtype=np.float32)
@@ -158,7 +153,6 @@ def build_heatmap(img_shape, boxes_xyxy):
     return heat_color
 
 
-# ---------- EMAIL ----------
 def send_email_with_pdf(sender_email: str, app_password: str, receiver_email: str,
                         subject: str, body: str, pdf_path: str):
     if not os.path.exists(pdf_path):
