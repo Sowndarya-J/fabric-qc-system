@@ -1,27 +1,34 @@
 import json
-import streamlit as st
+from datetime import datetime
+
 import av
 import cv2
 import pandas as pd
-from datetime import datetime
+import streamlit as st
 from PIL import Image
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
 
-from utils import get_model, save_images, insert_inspection
+from utils import get_model, save_images, insert_inspection, init_db
 
+st.set_page_config(page_title="Webcam Detection", layout="wide")
 st.title("📷 Real-time Webcam Detection (Mobile Front/Back)")
 
+# Initialize DB
+init_db()
+
+# Login check
 if not st.session_state.get("logged_in", False):
     st.warning("Please Login first (Go to Login page).")
     st.stop()
 
-# Load model once using cached function from utils.py
+# Cached model load from utils.py
 model = get_model()
 
 # ---------- Controls ----------
 confidence_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.25, 0.05)
 
 colA, colB, colC, colD = st.columns(4)
+
 with colA:
     run_webcam = st.toggle("Start Camera", value=False)
 
@@ -34,12 +41,12 @@ with colC:
 with colD:
     cam_mode = st.selectbox("Camera", ["Back Camera", "Front Camera"], index=0)
 
-# Map to WebRTC facingMode
+# Camera mode mapping
 facing_mode = "environment" if cam_mode == "Back Camera" else "user"
 
-st.caption("📌 Mobile tip: For back camera, select 'Back Camera'. If needed, stop and start camera again.")
+st.caption("📌 Mobile tip: Select Back Camera for rear camera. If it doesn't switch, stop and start camera again.")
 
-# Live placeholders
+# Placeholders
 live_counts_placeholder = st.empty()
 live_status_placeholder = st.empty()
 
@@ -68,6 +75,7 @@ class YOLOVideoProcessor(VideoProcessorBase):
                 imgsz=int(webcam_imgsz),
                 verbose=False
             )
+
             r0 = res[0]
             boxes = r0.boxes
             names = r0.names
@@ -84,6 +92,7 @@ class YOLOVideoProcessor(VideoProcessorBase):
 
                     counts[name] = counts.get(name, 0) + 1
                     total += 1
+
                     if conf > 0.80:
                         high += 1
 
@@ -138,7 +147,7 @@ if run_webcam:
 else:
     st.info("Turn ON **Start Camera** to begin real-time detection.")
 
-# ---- Show live stats + save snapshot ----
+# ---------- Live stats + Save snapshot ----------
 if ctx and ctx.video_processor:
     vp = ctx.video_processor
 
@@ -148,7 +157,9 @@ if ctx and ctx.video_processor:
 
     live_counts_placeholder.subheader("🧾 Live Defect Count")
     if counts:
-        live_counts_placeholder.table(pd.DataFrame(counts.items(), columns=["Defect", "Count"]))
+        live_counts_placeholder.table(
+            pd.DataFrame(counts.items(), columns=["Defect", "Count"])
+        )
     else:
         live_counts_placeholder.info("No defects detected in current frames.")
 
@@ -164,9 +175,11 @@ if ctx and ctx.video_processor:
         if vp.last_original is None or vp.last_annotated is None:
             st.warning("No frame available yet. Wait a few seconds after starting camera.")
         else:
+            # Convert original BGR -> RGB -> PIL
             original_rgb = cv2.cvtColor(vp.last_original, cv2.COLOR_BGR2RGB)
             original_pil = Image.fromarray(original_rgb)
 
+            # Save images
             orig_path, ann_path = save_images(
                 original_pil,
                 vp.last_annotated,
@@ -175,6 +188,7 @@ if ctx and ctx.video_processor:
 
             defects_json = json.dumps(vp.last_counts, ensure_ascii=False)
 
+            # Insert into DB
             dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             insert_inspection(
                 dt,
