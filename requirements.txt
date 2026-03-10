@@ -9,6 +9,3 @@ matplotlib
 reportlab
 numpy
 av
-fastapi
-uvicorn[standard]
-python-multipart
