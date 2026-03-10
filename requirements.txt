@@ -1,4 +1,5 @@
 streamlit
+streamlit-option-menu
 streamlit-webrtc
 ultralytics
 opencv-python-headless
