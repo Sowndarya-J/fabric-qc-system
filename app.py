@@ -2,6 +2,9 @@ import os
 import json
 from datetime import datetime
 
+import torch
+torch.set_num_threads(1)
+
 import av
 import cv2
 import pandas as pd
@@ -136,9 +139,11 @@ colA, colB, colC, colD = st.columns(4)
 with colA:
     run_webcam = st.toggle("Start Camera", value=False)
 with colB:
+    # default = 320
     webcam_imgsz = st.selectbox("img size (CPU friendly)", [320, 416, 512, 640], index=0)
 with colC:
-    webcam_every_n = st.selectbox("Run YOLO every N frames", [1, 2, 3, 4, 5], index=2)
+    # default = 4
+    webcam_every_n = st.selectbox("Run YOLO every N frames", [1, 2, 3, 4, 5], index=3)
 with colD:
     cam_mode = st.selectbox("Camera", ["Back Camera", "Front Camera"], index=0)
 
