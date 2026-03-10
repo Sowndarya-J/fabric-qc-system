@@ -10,13 +10,22 @@ from datetime import datetime
 import cv2
 import numpy as np
 import pandas as pd
+import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
 
 USERS_FILE = "users.json"
 DB_PATH = "fabric_inspections.db"
 SAVE_DIR = Path("saved_inspections")
-SAVE_DIR.mkdir(exist_ok=True)
+
+
+# ---------- PATH / DIR ----------
+def ensure_dirs():
+    SAVE_DIR.mkdir(exist_ok=True)
+
+
+ensure_dirs()
+
 
 # ---------- USERS ----------
 def load_users():
@@ -25,33 +34,47 @@ def load_users():
             return json.load(f)
     return {}
 
+
 def save_users(users_dict):
     with open(USERS_FILE, "w", encoding="utf-8") as f:
         json.dump(users_dict, f, indent=2)
 
-# ---------- MODEL ----------
-_model = None
-def get_model():
-    global _model
-    if _model is None:
-        _model = YOLO("best.pt")  # keep best.pt in main folder
-    return _model
 
-# ---------- DB HELPERS ----------
+def check_login(username: str, password: str) -> bool:
+    users = load_users()
+    return username in users and users[username]["password"] == password
+
+
+def get_role(username: str) -> str:
+    users = load_users()
+    return users[username]["role"]
+
+
+# ---------- MODEL ----------
+@st.cache_resource
+def get_model():
+    return YOLO("best.pt")
+
+
+# ---------- DB CONNECTION ----------
+def get_connection():
+    return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+
+
 def _column_exists(cur, table: str, col: str) -> bool:
     cur.execute(f"PRAGMA table_info({table})")
     cols = [r[1] for r in cur.fetchall()]
     return col in cols
 
+
 def init_db():
     """
     Creates DB if not exists and safely upgrades schema by adding missing columns.
-    This avoids needing to delete DB when you add new features.
+    This avoids deleting DB when new features are added.
     """
-    con = sqlite3.connect(DB_PATH)
+    con = get_connection()
     cur = con.cursor()
 
-    # base table
     cur.execute("""
     CREATE TABLE IF NOT EXISTS inspections (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,49 +90,62 @@ def init_db():
     )
     """)
 
-    # schema upgrades (safe add if old DB)
+    # Safe schema upgrades
     if not _column_exists(cur, "inspections", "source"):
         cur.execute("ALTER TABLE inspections ADD COLUMN source TEXT")
+
     if not _column_exists(cur, "inspections", "defects_json"):
         cur.execute("ALTER TABLE inspections ADD COLUMN defects_json TEXT")
 
     con.commit()
     con.close()
 
+
 def insert_inspection(dt, user, source, total, high, status, orig_path, ann_path, defects_json):
-    con = sqlite3.connect(DB_PATH)
+    con = get_connection()
     cur = con.cursor()
     cur.execute("""
-    INSERT INTO inspections (dt, user, source, total_defects, high_severity, quality_status, orig_path, ann_path, defects_json)
+    INSERT INTO inspections (
+        dt, user, source, total_defects, high_severity,
+        quality_status, orig_path, ann_path, defects_json
+    )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (dt, user, source, total, high, status, orig_path, ann_path, defects_json))
     con.commit()
     con.close()
 
+
 def read_inspections(limit=300):
-    con = sqlite3.connect(DB_PATH)
+    con = get_connection()
     df = pd.read_sql_query(
-        f"SELECT * FROM inspections ORDER BY id DESC LIMIT {limit}", con
+        f"SELECT * FROM inspections ORDER BY id DESC LIMIT {int(limit)}", con
     )
     con.close()
     return df
 
+
 def delete_inspection(row_id: int):
-    con = sqlite3.connect(DB_PATH)
+    con = get_connection()
     cur = con.cursor()
     cur.execute("DELETE FROM inspections WHERE id=?", (row_id,))
     con.commit()
     con.close()
 
+
 # ---------- SAVE IMAGES ----------
 def save_images(original_pil: Image.Image, annotated_bgr: np.ndarray, prefix: str):
+    ensure_dirs()
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     base = f"{prefix}_{ts}"
+
     original_path = SAVE_DIR / f"{base}_original.jpg"
     annotated_path = SAVE_DIR / f"{base}_annotated.jpg"
+
     original_pil.save(original_path)
     cv2.imwrite(str(annotated_path), annotated_bgr)
+
     return str(original_path), str(annotated_path)
+
 
 # ---------- HEATMAP ----------
 def build_heatmap(img_shape, boxes_xyxy):
@@ -120,12 +156,14 @@ def build_heatmap(img_shape, boxes_xyxy):
         x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(w - 1, x2), min(h - 1, y2)
-        heat[y1:y2, x1:x2] += 1.0
+        if x2 > x1 and y2 > y1:
+            heat[y1:y2, x1:x2] += 1.0
 
     heat = cv2.GaussianBlur(heat, (0, 0), sigmaX=25, sigmaY=25)
     heat_norm = cv2.normalize(heat, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
     heat_color = cv2.applyColorMap(heat_norm, cv2.COLORMAP_JET)
     return heat_color
+
 
 # ---------- EMAIL ----------
 def send_email_with_pdf(sender_email: str, app_password: str, receiver_email: str,
