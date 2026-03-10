@@ -2,10 +2,13 @@ streamlit
 streamlit-option-menu
 streamlit-webrtc
 ultralytics
-opencv-python
+opencv-python-headless
 pillow
 pandas
 matplotlib
 reportlab
 numpy
 av
+fastapi
+uvicorn[standard]
+python-multipart
