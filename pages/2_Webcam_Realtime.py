@@ -15,6 +15,7 @@ if not st.session_state.get("logged_in", False):
     st.warning("Please Login first (Go to Login page).")
     st.stop()
 
+# Load model once using cached function from utils.py
 model = get_model()
 
 # ---------- Controls ----------
@@ -31,13 +32,12 @@ with colC:
     webcam_every_n = st.selectbox("Run YOLO every N frames", [1, 2, 3, 4, 5], index=2)
 
 with colD:
-    # ✅ Camera selector (front/back)
     cam_mode = st.selectbox("Camera", ["Back Camera", "Front Camera"], index=0)
 
 # Map to WebRTC facingMode
 facing_mode = "environment" if cam_mode == "Back Camera" else "user"
 
-st.caption("📌 Mobile tip: For back camera, select 'Back Camera' and restart camera if needed.")
+st.caption("📌 Mobile tip: For back camera, select 'Back Camera'. If needed, stop and start camera again.")
 
 # Live placeholders
 live_counts_placeholder = st.empty()
@@ -46,21 +46,21 @@ live_status_placeholder = st.empty()
 class YOLOVideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.frame_count = 0
-        self.last_original = None     # last raw frame (BGR)
-        self.last_annotated = None    # last annotated frame (BGR)
+        self.last_original = None
+        self.last_annotated = None
         self.last_counts = {}
         self.last_total = 0
         self.last_high = 0
         self.last_status = "PASS"
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-        img = frame.to_ndarray(format="bgr24")  # BGR
+        img = frame.to_ndarray(format="bgr24")
         self.last_original = img.copy()
         self.frame_count += 1
 
         out = self.last_annotated if self.last_annotated is not None else img
 
-        # Run YOLO every N frames (CPU optimization)
+        # Run YOLO every N frames
         if self.frame_count % int(webcam_every_n) == 0:
             res = model.predict(
                 source=img,
@@ -100,7 +100,7 @@ class YOLOVideoProcessor(VideoProcessorBase):
             self.last_high = high
             self.last_status = status
 
-            annotated = r0.plot()  # BGR
+            annotated = r0.plot()
             self.last_annotated = annotated
             out = annotated
 
@@ -111,18 +111,29 @@ ctx = None
 
 if run_webcam:
     ctx = webrtc_streamer(
-        key=f"fabric-webcam-{facing_mode}",  # ✅ key changes when camera changes
+        key=f"fabric-webcam-{facing_mode}",
         mode=WebRtcMode.SENDRECV,
         video_processor_factory=YOLOVideoProcessor,
         media_stream_constraints={
             "video": {
-                "facingMode": {"ideal": facing_mode},  # ✅ front/back request
+                "facingMode": {"ideal": facing_mode},
                 "width": {"ideal": 1280},
                 "height": {"ideal": 720},
             },
             "audio": False,
         },
+        rtc_configuration={
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:stun1.l.google.com:19302"]},
+            ]
+        },
         async_processing=True,
+        video_html_attrs={
+            "autoPlay": True,
+            "playsInline": True,
+            "muted": True,
+        },
     )
 else:
     st.info("Turn ON **Start Camera** to begin real-time detection.")
@@ -153,11 +164,9 @@ if ctx and ctx.video_processor:
         if vp.last_original is None or vp.last_annotated is None:
             st.warning("No frame available yet. Wait a few seconds after starting camera.")
         else:
-            # Convert original BGR -> PIL RGB
             original_rgb = cv2.cvtColor(vp.last_original, cv2.COLOR_BGR2RGB)
             original_pil = Image.fromarray(original_rgb)
 
-            # Save both images
             orig_path, ann_path = save_images(
                 original_pil,
                 vp.last_annotated,
@@ -166,12 +175,11 @@ if ctx and ctx.video_processor:
 
             defects_json = json.dumps(vp.last_counts, ensure_ascii=False)
 
-            # Insert to DB with source showing camera type
             dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             insert_inspection(
                 dt,
                 st.session_state.user,
-                f"webcam-{facing_mode}",   # ✅ source = webcam-user / webcam-environment
+                f"webcam-{facing_mode}",
                 vp.last_total,
                 vp.last_high,
                 vp.last_status,
@@ -184,4 +192,4 @@ if ctx and ctx.video_processor:
             st.write(orig_path)
             st.write(ann_path)
 
-st.warning("⚠️ Mobile camera works best on HTTPS (Streamlit Cloud / ngrok). If camera doesn’t open on phone, use HTTPS.")
+st.warning("⚠️ Mobile camera works best on HTTPS. Render gives HTTPS, so allow camera permission in browser.")
