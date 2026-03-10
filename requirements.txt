@@ -1,4 +1,4 @@
-streamlit
+streamlit==1.32.2
 streamlit-option-menu
 streamlit-webrtc
 ultralytics
@@ -9,4 +9,6 @@ matplotlib
 reportlab
 numpy
 av
-torch
+torch==2.2.2+cpu
+torchvision==0.17.2+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
