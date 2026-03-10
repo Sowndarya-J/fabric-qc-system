@@ -1,20 +1,13 @@
 import os
 import json
-import sqlite3
-import smtplib
-import ssl
-from email.message import EmailMessage
-from pathlib import Path
 from datetime import datetime
 
 import av
 import cv2
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 from PIL import Image
-from ultralytics import YOLO
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image as RLImage
@@ -23,6 +16,20 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.lib.pagesizes import A4
 
+from utils import (
+    load_users,
+    save_users,
+    check_login,
+    get_role,
+    get_model,
+    init_db,
+    insert_inspection,
+    read_inspections,
+    delete_inspection,
+    save_images,
+    build_heatmap,
+    send_email_with_pdf,
+)
 
 # =========================
 # PAGE CONFIG
@@ -30,33 +37,18 @@ from reportlab.lib.pagesizes import A4
 st.set_page_config(page_title="Fabric Defect Detection", layout="wide")
 st.title("🧵 Fabric Defect Detection & Quality Monitoring System")
 
+# =========================
+# INIT DB
+# =========================
+init_db()
 
 # =========================
-# USERS FROM users.json
+# USERS
 # =========================
-USERS_FILE = "users.json"
-
-def load_users():
-    if os.path.exists(USERS_FILE):
-        with open(USERS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def save_users(users_dict):
-    with open(USERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(users_dict, f, indent=2)
-
 USERS = load_users()
 
-def check_login(username: str, password: str) -> bool:
-    return username in USERS and USERS[username]["password"] == password
-
-def get_role(username: str) -> str:
-    return USERS[username]["role"]
-
-
 # =========================
-# LOGIN UI
+# LOGIN SESSION
 # =========================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -89,9 +81,14 @@ if st.button("Logout"):
     st.session_state.role = None
     st.rerun()
 
+# =========================
+# MODEL + CONTROLS
+# =========================
+model = get_model()
+confidence_threshold = st.slider("Select Confidence Threshold", 0.0, 1.0, 0.25, 0.05)
 
 # =========================
-# ADMIN: USER CREATION PANEL
+# ADMIN: USER MANAGEMENT
 # =========================
 if st.session_state.role == "admin":
     st.header("👤 Admin: User Management")
@@ -119,148 +116,35 @@ if st.session_state.role == "admin":
         st.table(pd.DataFrame(user_table))
 
     with st.expander("🗑 Delete User", expanded=False):
-        del_user = st.selectbox("Select user to delete", list(USERS.keys()))
-        if st.button("Delete Selected User"):
-            if del_user == "admin":
-                st.error("You cannot delete the main admin.")
-            else:
-                USERS.pop(del_user, None)
-                save_users(USERS)
-                st.success(f"Deleted user: {del_user}")
-                st.rerun()
-
-
-# =========================
-# EMAIL FUNCTION
-# =========================
-def send_email_with_pdf(sender_email: str, app_password: str, receiver_email: str, subject: str, body: str, pdf_path: str):
-    if not os.path.exists(pdf_path):
-        raise FileNotFoundError(f"PDF not found: {pdf_path}")
-
-    msg = EmailMessage()
-    msg["From"] = sender_email
-    msg["To"] = receiver_email
-    msg["Subject"] = subject
-    msg.set_content(body)
-
-    with open(pdf_path, "rb") as f:
-        pdf_data = f.read()
-
-    msg.add_attachment(pdf_data, maintype="application", subtype="pdf", filename=os.path.basename(pdf_path))
-
-    context = ssl.create_default_context()
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
-        server.login(sender_email, app_password)
-        server.send_message(msg)
-
+        if USERS:
+            del_user = st.selectbox("Select user to delete", list(USERS.keys()))
+            if st.button("Delete Selected User"):
+                if del_user == "admin":
+                    st.error("You cannot delete the main admin.")
+                else:
+                    USERS.pop(del_user, None)
+                    save_users(USERS)
+                    st.success(f"Deleted user: {del_user}")
+                    st.rerun()
 
 # =========================
-# LOAD MODEL
+# REAL-TIME WEBCAM
 # =========================
-@st.cache_resource
-def load_model():
-    return YOLO("best.pt")
-
-model = load_model()
-confidence_threshold = st.slider("Select Confidence Threshold", 0.0, 1.0, 0.25, 0.05)
-
-
-# =========================
-# SAVE IMAGES
-# =========================
-SAVE_DIR = Path("saved_inspections")
-SAVE_DIR.mkdir(exist_ok=True)
-
-def save_images(original_pil: Image.Image, annotated_bgr: np.ndarray, prefix: str):
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base = f"{prefix}_{ts}"
-    original_path = SAVE_DIR / f"{base}_original.jpg"
-    annotated_path = SAVE_DIR / f"{base}_annotated.jpg"
-    original_pil.save(original_path)
-    cv2.imwrite(str(annotated_path), annotated_bgr)
-    return str(original_path), str(annotated_path)
-
-
-# =========================
-# SQLITE DATABASE
-# =========================
-DB_PATH = "fabric_inspections.db"
-
-def init_db():
-    con = sqlite3.connect(DB_PATH)
-    cur = con.cursor()
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS inspections (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        dt TEXT,
-        user TEXT,
-        total_defects INTEGER,
-        high_severity INTEGER,
-        quality_status TEXT,
-        orig_path TEXT,
-        ann_path TEXT
-    )
-    """)
-    con.commit()
-    con.close()
-
-def insert_inspection(dt, user, total, high, status, orig_path, ann_path):
-    con = sqlite3.connect(DB_PATH)
-    cur = con.cursor()
-    cur.execute("""
-    INSERT INTO inspections (dt, user, total_defects, high_severity, quality_status, orig_path, ann_path)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (dt, user, total, high, status, orig_path, ann_path))
-    con.commit()
-    con.close()
-
-def read_inspections(limit=300):
-    con = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query(f"SELECT * FROM inspections ORDER BY id DESC LIMIT {limit}", con)
-    con.close()
-    return df
-
-def delete_inspection(row_id: int):
-    con = sqlite3.connect(DB_PATH)
-    cur = con.cursor()
-    cur.execute("DELETE FROM inspections WHERE id=?", (row_id,))
-    con.commit()
-    con.close()
-
-init_db()
-
-
-# =========================
-# HEATMAP
-# =========================
-def build_heatmap(img_shape, boxes_xyxy):
-    h, w = img_shape[:2]
-    heat = np.zeros((h, w), dtype=np.float32)
-
-    for (x1, y1, x2, y2) in boxes_xyxy:
-        x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
-        x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(w - 1, x2), min(h - 1, y2)
-        heat[y1:y2, x1:x2] += 1.0
-
-    heat = cv2.GaussianBlur(heat, (0, 0), sigmaX=25, sigmaY=25)
-    heat_norm = cv2.normalize(heat, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-    heat_color = cv2.applyColorMap(heat_norm, cv2.COLORMAP_JET)
-    return heat_color
-
-
-# ==================================================
-# WEBCAM REAL-TIME + LIVE COUNT + STATUS
-# ==================================================
 st.header("📷 Real-time Webcam Detection")
 
-colA, colB, colC = st.columns(3)
+colA, colB, colC, colD = st.columns(4)
 with colA:
-    run_webcam = st.toggle("Start Webcam", value=False)
+    run_webcam = st.toggle("Start Camera", value=False)
 with colB:
-    webcam_imgsz = st.selectbox("Webcam img size (CPU friendly)", [320, 416, 512, 640], index=0)
+    webcam_imgsz = st.selectbox("img size (CPU friendly)", [320, 416, 512, 640], index=0)
 with colC:
-    webcam_every_n = st.selectbox("Run YOLO every N frames (CPU)", [1, 2, 3, 4, 5], index=2)
+    webcam_every_n = st.selectbox("Run YOLO every N frames", [1, 2, 3, 4, 5], index=2)
+with colD:
+    cam_mode = st.selectbox("Camera", ["Back Camera", "Front Camera"], index=0)
+
+facing_mode = "environment" if cam_mode == "Back Camera" else "user"
+
+st.caption("📌 Mobile tip: For back camera, select 'Back Camera'. If needed, stop and start camera again.")
 
 live_counts_placeholder = st.empty()
 live_status_placeholder = st.empty()
@@ -268,18 +152,27 @@ live_status_placeholder = st.empty()
 class YOLOVideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.frame_count = 0
+        self.last_original = None
         self.last_annotated = None
         self.last_counts = {}
         self.last_total = 0
+        self.last_high = 0
         self.last_status = "PASS"
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
         img = frame.to_ndarray(format="bgr24")
+        self.last_original = img.copy()
         self.frame_count += 1
-        out = img
+
+        out = self.last_annotated if self.last_annotated is not None else img
 
         if self.frame_count % int(webcam_every_n) == 0:
-            res = model.predict(source=img, conf=float(confidence_threshold), imgsz=int(webcam_imgsz), verbose=False)
+            res = model.predict(
+                source=img,
+                conf=float(confidence_threshold),
+                imgsz=int(webcam_imgsz),
+                verbose=False
+            )
             r0 = res[0]
             boxes = r0.boxes
             names = r0.names
@@ -307,32 +200,51 @@ class YOLOVideoProcessor(VideoProcessorBase):
 
             self.last_counts = counts
             self.last_total = total
+            self.last_high = high
             self.last_status = status
 
             annotated = r0.plot()
             self.last_annotated = annotated
             out = annotated
-        else:
-            out = self.last_annotated if self.last_annotated is not None else img
 
         return av.VideoFrame.from_ndarray(out, format="bgr24")
 
 ctx = None
+
 if run_webcam:
     ctx = webrtc_streamer(
-        key="fabric-webcam",
+        key=f"fabric-webcam-{facing_mode}",
         mode=WebRtcMode.SENDRECV,
         video_processor_factory=YOLOVideoProcessor,
-        media_stream_constraints={"video": True, "audio": False},
+        media_stream_constraints={
+            "video": {
+                "facingMode": {"ideal": facing_mode},
+                "width": {"ideal": 1280},
+                "height": {"ideal": 720},
+            },
+            "audio": False,
+        },
+        rtc_configuration={
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:stun1.l.google.com:19302"]},
+            ]
+        },
         async_processing=True,
+        video_html_attrs={
+            "autoPlay": True,
+            "playsInline": True,
+            "muted": True,
+        },
     )
 else:
-    st.info("Turn ON **Start Webcam** to begin real-time detection.")
+    st.info("Turn ON **Start Camera** to begin real-time detection.")
 
 if ctx and ctx.video_processor:
-    counts = ctx.video_processor.last_counts
-    total = ctx.video_processor.last_total
-    status = ctx.video_processor.last_status
+    vp = ctx.video_processor
+    counts = vp.last_counts
+    total = vp.last_total
+    status = vp.last_status
 
     live_counts_placeholder.subheader("🧾 Live Defect Count")
     if counts:
@@ -345,10 +257,46 @@ if ctx and ctx.video_processor:
     else:
         live_status_placeholder.error(f"❌ LIVE QUALITY: REJECT (Total defects: {total})")
 
+    st.divider()
+    st.subheader("💾 Save Camera Snapshot to History")
 
-# ==========================
+    if st.button("📌 Save Current Frame"):
+        if vp.last_original is None or vp.last_annotated is None:
+            st.warning("No frame available yet. Wait a few seconds after starting camera.")
+        else:
+            original_rgb = cv2.cvtColor(vp.last_original, cv2.COLOR_BGR2RGB)
+            original_pil = Image.fromarray(original_rgb)
+
+            orig_path, ann_path = save_images(
+                original_pil,
+                vp.last_annotated,
+                prefix=f"{facing_mode}_{st.session_state.user}"
+            )
+
+            defects_json = json.dumps(vp.last_counts, ensure_ascii=False)
+
+            dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            insert_inspection(
+                dt,
+                st.session_state.user,
+                f"webcam-{facing_mode}",
+                vp.last_total,
+                vp.last_high,
+                vp.last_status,
+                orig_path,
+                ann_path,
+                defects_json
+            )
+
+            st.success("✅ Saved snapshot to history!")
+            st.write(orig_path)
+            st.write(ann_path)
+
+st.warning("⚠️ Mobile camera works best on HTTPS. Render gives HTTPS, so allow camera permission in browser.")
+
+# =========================
 # IMAGE UPLOAD DETECTION
-# ==========================
+# =========================
 st.header("🖼️ Image Upload Detection")
 
 uploaded_file = st.file_uploader("Upload Fabric Image", type=["jpg", "png", "jpeg"])
@@ -358,10 +306,9 @@ if uploaded_file is not None:
     st.image(image, caption="Uploaded Image", width=500)
 
     if st.button("Detect Defects (Image)"):
-
         results = model(image, conf=confidence_threshold)
         result = results[0]
-        result_image = result.plot()  # BGR numpy
+        result_image = result.plot()
 
         st.image(result_image, caption="Detected Defects", width=500)
 
@@ -371,6 +318,9 @@ if uploaded_file is not None:
         defect_data = []
         defect_count = {}
         total_defects = 0
+        high_defects = 0
+        quality_status = "PASS"
+        defects_json = "{}"
 
         if boxes is not None and len(boxes) > 0:
             for box in boxes:
@@ -388,6 +338,8 @@ if uploaded_file is not None:
                 total_defects += 1
                 defect_count[defect_name] = defect_count.get(defect_name, 0) + 1
                 defect_data.append([defect_name, round(conf * 100, 2), severity])
+
+            defects_json = json.dumps(defect_count, ensure_ascii=False)
 
             st.subheader("📋 Defect Details")
             df = pd.DataFrame(defect_data, columns=["Defect Type", "Confidence (%)", "Severity"])
@@ -424,14 +376,24 @@ if uploaded_file is not None:
             quality_status = "PASS"
             total_defects = 0
             high_defects = 0
+            defects_json = json.dumps({}, ensure_ascii=False)
 
         orig_path, ann_path = save_images(image, result_image, prefix=st.session_state.user)
         st.success(f"Saved images:\n{orig_path}\n{ann_path}")
 
         dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        insert_inspection(dt, st.session_state.user, total_defects, high_defects, quality_status, orig_path, ann_path)
+        insert_inspection(
+            dt,
+            st.session_state.user,
+            "image-upload",
+            total_defects,
+            high_defects,
+            quality_status,
+            orig_path,
+            ann_path,
+            defects_json
+        )
 
-        # PDF
         pdf_path = "Fabric_Report.pdf"
         doc = SimpleDocTemplate(pdf_path, pagesize=A4)
         elements = []
@@ -464,9 +426,13 @@ if uploaded_file is not None:
         doc.build(elements)
 
         with open(pdf_path, "rb") as f:
-            st.download_button("📄 Download PDF Report", data=f, file_name="Fabric_Report.pdf", mime="application/pdf")
+            st.download_button(
+                "📄 Download PDF Report",
+                data=f,
+                file_name="Fabric_Report.pdf",
+                mime="application/pdf"
+            )
 
-        # EMAIL (secrets auto-fill)
         st.subheader("📧 Email PDF Report (Gmail)")
         with st.expander("Send report via Email", expanded=False):
             sender_email = st.text_input(
@@ -481,7 +447,6 @@ if uploaded_file is not None:
                 placeholder="16-character app password"
             )
             receiver_email = st.text_input("Receiver Email", placeholder="receiver@gmail.com")
-
             email_subject = st.text_input("Email Subject", value="Fabric Defect Detection Report")
             email_body = st.text_area(
                 "Email Message",
@@ -491,7 +456,7 @@ if uploaded_file is not None:
             if st.button("📨 Send Email"):
                 try:
                     if not sender_email or not app_password or not receiver_email:
-                        st.warning("Please fill Receiver Email (Sender is from secrets).")
+                        st.warning("Please fill sender, app password, and receiver email.")
                     else:
                         send_email_with_pdf(
                             sender_email=sender_email.strip(),
@@ -505,13 +470,13 @@ if uploaded_file is not None:
                 except Exception as e:
                     st.error(f"❌ Email failed: {e}")
 
-
-# ==========================
-# ADMIN DASHBOARD (DB + Export + Delete)
-# ==========================
+# =========================
+# ADMIN DASHBOARD
+# =========================
 if st.session_state.role == "admin":
     st.header("🛠 Admin Dashboard")
     db_df = read_inspections(limit=300)
+
     st.subheader("📦 Database Records")
     st.dataframe(db_df)
 
@@ -532,10 +497,9 @@ if st.session_state.role == "admin":
         else:
             st.warning("Enter valid ID")
 
-
-# ==========================
-# TRAINING METRICS (results.csv)
-# ==========================
+# =========================
+# TRAINING METRICS
+# =========================
 st.header("📊 Model Performance Metrics (Training)")
 st.write("results.csv found:", os.path.exists("results.csv"))
 
