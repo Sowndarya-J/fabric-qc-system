@@ -19,10 +19,8 @@ DB_PATH = "fabric_inspections.db"
 SAVE_DIR = Path("saved_inspections")
 
 
-# ---------- PATH / DIR ----------
 def ensure_dirs():
     SAVE_DIR.mkdir(exist_ok=True)
-
 
 ensure_dirs()
 
@@ -56,7 +54,7 @@ def get_model():
     return YOLO("best.pt")
 
 
-# ---------- DB CONNECTION ----------
+# ---------- DB ----------
 def get_connection():
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
 
@@ -68,10 +66,6 @@ def _column_exists(cur, table: str, col: str) -> bool:
 
 
 def init_db():
-    """
-    Creates DB if not exists and safely upgrades schema by adding missing columns.
-    This avoids deleting DB when new features are added.
-    """
     con = get_connection()
     cur = con.cursor()
 
@@ -90,7 +84,6 @@ def init_db():
     )
     """)
 
-    # Safe schema upgrades
     if not _column_exists(cur, "inspections", "source"):
         cur.execute("ALTER TABLE inspections ADD COLUMN source TEXT")
 
