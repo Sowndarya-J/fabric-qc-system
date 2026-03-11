@@ -15,7 +15,6 @@ venv/
 # Database & outputs
 fabric_inspections.db
 Fabric_Report.pdf
-results.csv
 inspection_history.csv
 
 # Generated images
