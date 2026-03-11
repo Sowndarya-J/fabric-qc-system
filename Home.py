@@ -1,33 +1,22 @@
+import os
 import streamlit as st
 from streamlit_option_menu import option_menu
-from utils import init_db
-import os
 
-# -----------------------------
+# --------------------------
 # PAGE CONFIG
-# -----------------------------
-st.set_page_config(
-    page_title="Fabric QC System",
-    layout="wide",
-)
+# --------------------------
+st.set_page_config(page_title="Fabric QC System", layout="wide")
 
-# -----------------------------
-# INIT DATABASE
-# -----------------------------
-init_db()
-
-# -----------------------------
-# HIDE DEFAULT STREAMLIT NAV
-# -----------------------------
+# Hide default Streamlit navigation
 st.markdown("""
 <style>
 section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] {display:none;}
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------
+# --------------------------
 # SIDEBAR
-# -----------------------------
+# --------------------------
 with st.sidebar:
 
     st.markdown("## 🧵 Fabric QC System")
@@ -61,11 +50,11 @@ with st.sidebar:
             "nav-link": {
                 "font-size": "15px",
                 "text-align": "left",
-                "margin": "5px",
+                "margin": "5px"
             },
             "nav-link-selected": {
-                "background-color": "#262730",
-            },
+                "background-color": "#262730"
+            }
         }
     )
 
@@ -88,10 +77,9 @@ with st.sidebar:
     else:
         st.warning("Not logged in")
 
-
-# -----------------------------
+# --------------------------
 # SAFE PAGE LOADER
-# -----------------------------
+# --------------------------
 def run_page(path):
 
     if not os.path.exists(path):
@@ -108,10 +96,9 @@ def run_page(path):
         st.error("Error loading page")
         st.exception(e)
 
-
-# -----------------------------
+# --------------------------
 # ROUTING
-# -----------------------------
+# --------------------------
 if selected == "Home":
 
     st.title("🏠 Fabric Defect Detection System")
@@ -121,20 +108,20 @@ if selected == "Home":
     st.markdown("""
 ### Modules
 
-- 🔐 **Login (Admin / Operator)**
-- 🖼 **Image Upload Detection**
-- 📷 **Live Webcam Detection**
-- 📊 **Model Performance Metrics**
-- 🛠 **Admin Dashboard**
+- 🔐 Login (Admin / Operator)  
+- 🖼 Image Upload Detection  
+- 📷 Live Webcam Detection  
+- 📊 Model Metrics  
+- 🛠 Admin Dashboard  
 
 ### Features
 
-- YOLO Fabric Defect Detection  
-- Real-time Camera Inspection  
-- PDF Report Generation  
-- Email Report Sending  
-- SQLite Inspection Database  
-- Admin Analytics Dashboard  
+✔ YOLO Fabric Defect Detection  
+✔ Real-time Camera Inspection  
+✔ PDF Report Generation  
+✔ Email Report Sending  
+✔ SQLite Inspection Database  
+✔ Admin Analytics Dashboard  
 """)
 
 elif selected == "Login":
