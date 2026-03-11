@@ -3,9 +3,11 @@ import json
 import streamlit as st
 import pandas as pd
 
-from utils import read_inspections, delete_inspection, load_users, save_users
+from utils import read_inspections, delete_inspection, load_users, save_users, init_db
 
 st.title("🛠 Admin Dashboard")
+
+init_db()
 
 if not st.session_state.get("logged_in", False):
     st.warning("Please Login first (Go to Login page).")
@@ -15,9 +17,6 @@ if st.session_state.get("role") != "admin":
     st.error("❌ Only Admin can access this page.")
     st.stop()
 
-# -----------------------------
-# USER MANAGEMENT
-# -----------------------------
 st.header("👤 User Management")
 USERS = load_users()
 
@@ -52,9 +51,6 @@ with st.expander("🗑 Delete User", expanded=False):
             st.success(f"Deleted user: {del_user}")
             st.rerun()
 
-# -----------------------------
-# LOAD DB
-# -----------------------------
 st.header("📦 Inspection Database")
 db_df = read_inspections(limit=800)
 
@@ -71,9 +67,6 @@ if "source" not in db_df.columns:
 if "defects_json" not in db_df.columns:
     db_df["defects_json"] = "{}"
 
-# -----------------------------
-# BUILD DEFECT LIST (for filter + analytics)
-# -----------------------------
 def safe_load_defects(s):
     try:
         if s is None or str(s).strip() == "":
@@ -90,9 +83,6 @@ for s in db_df["defects_json"].tolist():
 
 all_defects = sorted(list(all_defects))
 
-# -----------------------------
-# SEARCH & FILTER
-# -----------------------------
 st.subheader("🔎 Search & Filter")
 
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -135,7 +125,6 @@ if selected_status != "All":
 if selected_source != "All":
     filtered = filtered[filtered["source"].astype(str) == selected_source]
 
-# Defect filter
 if selected_defect != "All":
     def has_defect(x):
         d = safe_load_defects(x)
@@ -145,7 +134,7 @@ if selected_defect != "All":
 st.write(f"✅ Filtered records: **{len(filtered)}**")
 
 show_df = filtered.drop(columns=["date"])
-st.dataframe(show_df, width="stretch")
+st.dataframe(show_df, use_container_width=True)
 
 st.download_button(
     "⬇️ Download Filtered CSV",
@@ -154,9 +143,6 @@ st.download_button(
     mime="text/csv",
 )
 
-# -----------------------------
-# PREVIEW IMAGES
-# -----------------------------
 st.header("🖼 Preview Saved Images")
 
 if len(filtered) > 0:
@@ -181,33 +167,9 @@ if len(filtered) > 0:
             st.image(ann_path, width=420)
         else:
             st.warning("Annotated image file not found.")
-
-    st.subheader("⬇️ Download Images")
-    d1, d2 = st.columns(2)
-    with d1:
-        if orig_path and os.path.exists(orig_path):
-            with open(orig_path, "rb") as f:
-                st.download_button(
-                    "Download Original",
-                    data=f,
-                    file_name=os.path.basename(orig_path),
-                    mime="image/jpeg"
-                )
-    with d2:
-        if ann_path and os.path.exists(ann_path):
-            with open(ann_path, "rb") as f:
-                st.download_button(
-                    "Download Annotated",
-                    data=f,
-                    file_name=os.path.basename(ann_path),
-                    mime="image/jpeg"
-                )
 else:
     st.info("No rows after filter. Adjust filters to preview images.")
 
-# -----------------------------
-# ANALYTICS DASHBOARD
-# -----------------------------
 st.header("📊 Analytics Dashboard")
 
 total_inspections = len(filtered)
@@ -221,51 +183,6 @@ m2.metric("Total Defects", f"{total_defects}")
 m3.metric("Avg Defects / Fabric", f"{avg_defects:.2f}")
 m4.metric("Reject Count", f"{reject_count}")
 
-st.subheader("📅 Defects Per Day")
-per_day = (
-    filtered.groupby("date")["total_defects"]
-    .sum()
-    .reset_index()
-    .sort_values("date")
-    .set_index("date")
-)
-st.line_chart(per_day)
-
-st.subheader("✅ PASS vs ❌ REJECT")
-status_counts = (
-    filtered["quality_status"]
-    .value_counts()
-    .rename_axis("status")
-    .reset_index(name="count")
-)
-st.bar_chart(status_counts.set_index("status"))
-
-st.subheader("📸 Inspections by Source")
-by_source = filtered["source"].value_counts().to_frame("count")
-st.bar_chart(by_source)
-
-# -------- Most common defect + Top defects chart --------
-st.subheader("⭐ Most Common Defect Type")
-
-agg = {}
-for s in filtered["defects_json"].tolist():
-    d = safe_load_defects(s)
-    for k, v in d.items():
-        agg[k] = agg.get(k, 0) + int(v)
-
-if len(agg) == 0:
-    st.info("No defect type data available yet. Save some inspections first.")
-else:
-    most_common = max(agg.items(), key=lambda x: x[1])
-    st.success(f"Most common defect: **{most_common[0]}** (Total: {most_common[1]})")
-
-    st.subheader("📊 Top Defects (Count)")
-    agg_df = pd.DataFrame(sorted(agg.items(), key=lambda x: x[1], reverse=True), columns=["Defect", "Count"])
-    st.bar_chart(agg_df.set_index("Defect"))
-
-# -----------------------------
-# DELETE RECORD
-# -----------------------------
 st.subheader("🗑 Delete Inspection Record")
 del_id = st.number_input("Enter inspection ID to delete", min_value=0, step=1)
 if st.button("Delete Record"):
