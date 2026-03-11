@@ -1,26 +1,39 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
 from utils import init_db
+import os
 
-st.set_page_config(page_title="Fabric QC System", layout="wide")
+# -----------------------------
+# PAGE CONFIG
+# -----------------------------
+st.set_page_config(
+    page_title="Fabric QC System",
+    layout="wide",
+)
 
+# -----------------------------
+# INIT DATABASE
+# -----------------------------
 init_db()
 
-# ---------- Hide default Streamlit navigation ----------
+# -----------------------------
+# HIDE DEFAULT STREAMLIT NAV
+# -----------------------------
 st.markdown("""
 <style>
 section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] {display:none;}
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- SIDEBAR ----------
+# -----------------------------
+# SIDEBAR
+# -----------------------------
 with st.sidebar:
 
     st.markdown("## 🧵 Fabric QC System")
     st.caption("Real-time Fabric Defect Detection")
 
     st.markdown("---")
-
     st.markdown("### MODULES")
 
     selected = option_menu(
@@ -57,7 +70,6 @@ with st.sidebar:
     )
 
     st.markdown("---")
-
     st.markdown("### USER")
 
     if st.session_state.get("logged_in", False):
@@ -76,14 +88,30 @@ with st.sidebar:
     else:
         st.warning("Not logged in")
 
-# ---------- PAGE LOADER ----------
+
+# -----------------------------
+# SAFE PAGE LOADER
+# -----------------------------
 def run_page(path):
-    with open(path, "r", encoding="utf-8") as f:
-        code = f.read()
-    exec(compile(code, path, "exec"), globals(), globals())
+
+    if not os.path.exists(path):
+        st.error(f"Page not found: {path}")
+        return
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        exec(compile(code, path, "exec"), globals(), globals())
+
+    except Exception as e:
+        st.error("Error loading page")
+        st.exception(e)
 
 
-# ---------- ROUTING ----------
+# -----------------------------
+# ROUTING
+# -----------------------------
 if selected == "Home":
 
     st.title("🏠 Fabric Defect Detection System")
@@ -93,11 +121,11 @@ if selected == "Home":
     st.markdown("""
 ### Modules
 
-- 🔐 Login (Admin / Operator)
-- 🖼 Image Upload Detection
-- 📷 Live Webcam Detection
-- 📊 Model Metrics
-- 🛠 Admin Dashboard
+- 🔐 **Login (Admin / Operator)**
+- 🖼 **Image Upload Detection**
+- 📷 **Live Webcam Detection**
+- 📊 **Model Performance Metrics**
+- 🛠 **Admin Dashboard**
 
 ### Features
 
@@ -108,7 +136,6 @@ if selected == "Home":
 - SQLite Inspection Database  
 - Admin Analytics Dashboard  
 """)
-
 
 elif selected == "Login":
     run_page("pages/1_Login.py")
