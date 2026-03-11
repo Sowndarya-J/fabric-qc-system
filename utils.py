@@ -7,6 +7,11 @@ from email.message import EmailMessage
 from pathlib import Path
 from datetime import datetime
 
+try:
+    import cv2
+except Exception:
+    cv2 = None
+
 import numpy as np
 from PIL import Image
 import streamlit as st
@@ -102,7 +107,8 @@ def delete_inspection(row_id):
 
 # ---------- SAVE IMAGES ----------
 def save_images(original_pil: Image.Image, annotated_bgr: np.ndarray, prefix: str):
-    import cv2
+    if cv2 is None:
+        raise RuntimeError("OpenCV is not available on this system.")
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     base = f"{prefix}_{ts}"
@@ -118,7 +124,8 @@ def save_images(original_pil: Image.Image, annotated_bgr: np.ndarray, prefix: st
 
 # ---------- HEATMAP ----------
 def build_heatmap(img_shape, boxes_xyxy):
-    import cv2
+    if cv2 is None:
+        raise RuntimeError("OpenCV is not available on this system.")
 
     h, w = img_shape[:2]
     heat = np.zeros((h, w), dtype=np.float32)
