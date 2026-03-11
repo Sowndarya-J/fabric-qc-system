@@ -2,7 +2,12 @@ import json
 from datetime import datetime
 
 import av
-import cv2
+
+try:
+    import cv2
+except Exception:
+    cv2 = None
+
 import pandas as pd
 import streamlit as st
 from PIL import Image
@@ -16,6 +21,10 @@ init_db()
 
 if not st.session_state.get("logged_in", False):
     st.warning("Please Login first (Go to Login page).")
+    st.stop()
+
+if cv2 is None:
+    st.error("OpenCV is not available on this system.")
     st.stop()
 
 confidence_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.25, 0.05)
