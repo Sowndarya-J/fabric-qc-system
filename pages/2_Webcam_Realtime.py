@@ -30,28 +30,29 @@ if cv2 is None:
 # -----------------------------
 # SESSION STATE
 # -----------------------------
-if "captured_frame_bgr" not in st.session_state:
+def reset_camera_state():
     st.session_state.captured_frame_bgr = None
-
-if "detected_frame_bgr" not in st.session_state:
     st.session_state.detected_frame_bgr = None
-
-if "detected_counts" not in st.session_state:
     st.session_state.detected_counts = {}
-
-if "detected_total" not in st.session_state:
     st.session_state.detected_total = 0
-
-if "detected_high" not in st.session_state:
     st.session_state.detected_high = 0
-
-if "detected_status" not in st.session_state:
     st.session_state.detected_status = "PASS"
+
+if "captured_frame_bgr" not in st.session_state:
+    reset_camera_state()
 
 # -----------------------------
 # CONTROLS
 # -----------------------------
-confidence_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.25, 0.05)
+start_camera = st.toggle("Start Camera", value=False)
+
+confidence_threshold = st.slider(
+    "Confidence Threshold",
+    min_value=0.30,
+    max_value=1.00,
+    value=0.60,
+    step=0.05
+)
 
 c1, c2 = st.columns(2)
 with c1:
@@ -61,7 +62,7 @@ with c2:
 
 facing_mode = "environment" if cam_mode == "Back Camera" else "user"
 
-st.caption("📌 Mobile tip: choose Back Camera for fabric inspection.")
+st.caption("📌 Mobile tip: choose Back Camera for fabric inspection. Use Chrome and allow camera permission.")
 
 # -----------------------------
 # VIDEO PROCESSOR
@@ -75,35 +76,39 @@ class CameraCaptureProcessor(VideoProcessorBase):
         self.last_frame = img.copy()
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-
 # -----------------------------
 # CAMERA PREVIEW
 # -----------------------------
-ctx = webrtc_streamer(
-    key=f"mobile-capture-{facing_mode}",
-    mode=WebRtcMode.SENDRECV,
-    video_processor_factory=CameraCaptureProcessor,
-    media_stream_constraints={
-        "video": {
-            "facingMode": {"ideal": facing_mode},
-            "width": {"ideal": 1280},
-            "height": {"ideal": 720},
+ctx = None
+
+if start_camera:
+    ctx = webrtc_streamer(
+        key=f"mobile-capture-{facing_mode}",
+        mode=WebRtcMode.SENDRECV,
+        video_processor_factory=CameraCaptureProcessor,
+        media_stream_constraints={
+            "video": {
+                "facingMode": {"ideal": facing_mode},
+                "width": {"ideal": 1280},
+                "height": {"ideal": 720},
+            },
+            "audio": False,
         },
-        "audio": False,
-    },
-    rtc_configuration={
-        "iceServers": [
-            {"urls": ["stun:stun.l.google.com:19302"]},
-            {"urls": ["stun:stun1.l.google.com:19302"]},
-        ]
-    },
-    async_processing=True,
-    video_html_attrs={
-        "autoPlay": True,
-        "playsInline": True,
-        "muted": True,
-    },
-)
+        rtc_configuration={
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:stun1.l.google.com:19302"]},
+            ]
+        },
+        async_processing=True,
+        video_html_attrs={
+            "autoPlay": True,
+            "playsInline": True,
+            "muted": True,
+        },
+    )
+else:
+    st.info("Turn on **Start Camera** to preview and capture a frame.")
 
 # -----------------------------
 # ACTION BUTTONS
@@ -111,36 +116,37 @@ ctx = webrtc_streamer(
 b1, b2, b3, b4 = st.columns(4)
 
 with b1:
-    capture_clicked = st.button("📸 Capture")
+    capture_clicked = st.button("📸 Capture", use_container_width=True)
 
 with b2:
-    detect_clicked = st.button("🔍 Detect")
+    detect_clicked = st.button("🔍 Detect", use_container_width=True)
 
 with b3:
-    retake_clicked = st.button("🔄 Retake")
+    retake_clicked = st.button("🔄 Retake", use_container_width=True)
 
 with b4:
-    save_clicked = st.button("💾 Save Result")
+    save_clicked = st.button("💾 Save Result", use_container_width=True)
 
 # -----------------------------
 # RETAKE
 # -----------------------------
 if retake_clicked:
-    st.session_state.captured_frame_bgr = None
-    st.session_state.detected_frame_bgr = None
-    st.session_state.detected_counts = {}
-    st.session_state.detected_total = 0
-    st.session_state.detected_high = 0
-    st.session_state.detected_status = "PASS"
+    reset_camera_state()
     st.rerun()
 
 # -----------------------------
 # CAPTURE FRAME
 # -----------------------------
 if capture_clicked:
-    if ctx and ctx.video_processor and ctx.video_processor.last_frame is not None:
+    if not start_camera:
+        st.warning("Please start the camera first.")
+    elif ctx and ctx.video_processor and ctx.video_processor.last_frame is not None:
         st.session_state.captured_frame_bgr = ctx.video_processor.last_frame.copy()
         st.session_state.detected_frame_bgr = None
+        st.session_state.detected_counts = {}
+        st.session_state.detected_total = 0
+        st.session_state.detected_high = 0
+        st.session_state.detected_status = "PASS"
         st.success("✅ Frame captured.")
     else:
         st.warning("No frame available yet. Wait a few seconds and try again.")
