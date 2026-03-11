@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import pandas as pd
 import streamlit as st
 
@@ -8,13 +9,45 @@ if not st.session_state.get("logged_in", False):
     st.warning("Please Login first (Go to Login page).")
     st.stop()
 
-st.write("results.csv found:", os.path.exists("results.csv"))
+# -----------------------------
+# Possible file locations
+# -----------------------------
+possible_paths = [
+    Path("results.csv"),
+    Path("./results.csv"),
+    Path("data/results.csv"),
+    Path("runs/detect/results.csv"),
+    Path("runs/train/results.csv"),
+]
 
-if not os.path.exists("results.csv"):
-    st.info("📌 Put your training results.csv inside the project root folder.")
+results_path = None
+for p in possible_paths:
+    if p.exists():
+        results_path = p
+        break
+
+st.write("results.csv found:", results_path is not None)
+
+if results_path is None:
+    st.info("📌 Put your training results.csv inside the project root folder (same level as Home.py).")
+
+    st.subheader("📂 Files available in current folder")
+    try:
+        files_here = sorted(os.listdir("."))
+        st.code("\n".join(files_here))
+    except Exception as e:
+        st.error(f"Could not list files: {e}")
+
     st.stop()
 
-metrics_df = pd.read_csv("results.csv")
+# -----------------------------
+# Load CSV
+# -----------------------------
+try:
+    metrics_df = pd.read_csv(results_path)
+except Exception as e:
+    st.error(f"Failed to read {results_path}: {e}")
+    st.stop()
 
 if metrics_df.empty:
     st.error("results.csv is empty.")
@@ -22,12 +55,15 @@ if metrics_df.empty:
 
 last_row = metrics_df.iloc[-1]
 
+# -----------------------------
+# Column picker
+# -----------------------------
 def pick(cols, default=0.0):
     for c in cols:
         if c in metrics_df.columns:
             try:
                 return float(last_row[c])
-            except:
+            except Exception:
                 return float(default)
     return float(default)
 
@@ -36,6 +72,9 @@ recall = pick(["metrics/recall(B)", "metrics/recall", "recall"])
 map50 = pick(["metrics/mAP50(B)", "metrics/mAP50", "mAP50"])
 map5095 = pick(["metrics/mAP50-95(B)", "metrics/mAP50-95", "mAP50-95"])
 
+# -----------------------------
+# Show metrics
+# -----------------------------
 st.subheader("✅ Last Epoch Metrics")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Precision", f"{precision:.3f}")
@@ -43,5 +82,35 @@ c2.metric("Recall", f"{recall:.3f}")
 c3.metric("mAP@50", f"{map50:.3f}")
 c4.metric("mAP@50-95", f"{map5095:.3f}")
 
+# -----------------------------
+# Training curves
+# -----------------------------
+st.subheader("📈 Training Curves")
+
+def try_line_chart(label, candidates):
+    for col in candidates:
+        if col in metrics_df.columns:
+            st.write(f"**{label}** → `{col}`")
+            st.line_chart(metrics_df[col])
+            return True
+    return False
+
+found_any = False
+found_any |= try_line_chart("Precision", ["metrics/precision(B)", "metrics/precision", "precision"])
+found_any |= try_line_chart("Recall", ["metrics/recall(B)", "metrics/recall", "recall"])
+found_any |= try_line_chart("mAP@50", ["metrics/mAP50(B)", "metrics/mAP50", "mAP50"])
+found_any |= try_line_chart("mAP@50-95", ["metrics/mAP50-95(B)", "metrics/mAP50-95", "mAP50-95"])
+found_any |= try_line_chart("Train Box Loss", ["train/box_loss", "box_loss"])
+found_any |= try_line_chart("Train Class Loss", ["train/cls_loss", "cls_loss"])
+found_any |= try_line_chart("Train DFL Loss", ["train/dfl_loss", "dfl_loss"])
+
+if not found_any:
+    st.warning("No known metric columns found. Check the CSV column names below.")
+
+# -----------------------------
+# Full table
+# -----------------------------
 with st.expander("📄 Show full results.csv"):
     st.dataframe(metrics_df, use_container_width=True)
+
+st.caption(f"Using file: {results_path}")
