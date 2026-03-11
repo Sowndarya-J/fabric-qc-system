@@ -1,7 +1,5 @@
-import os
 import json
 import cv2
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
@@ -19,16 +17,17 @@ from utils import (
     save_images,
     build_heatmap,
     insert_inspection,
-    send_email_with_pdf
+    send_email_with_pdf,
+    init_db
 )
 
 st.title("🖼 Image Upload Detection")
 
+init_db()
+
 if not st.session_state.get("logged_in", False):
     st.warning("Please Login first (Go to Login page).")
     st.stop()
-
-model = get_model()
 
 confidence_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.25, 0.05)
 
@@ -39,10 +38,11 @@ if uploaded_file is not None:
     st.image(image, caption="Uploaded Image", width=500)
 
     if st.button("Detect Defects (Image)"):
+        model = get_model()
 
         results = model(image, conf=confidence_threshold)
         result = results[0]
-        result_image = result.plot()  # BGR numpy array
+        result_image = result.plot()
 
         st.image(result_image, caption="Detected Defects", width=500)
 
@@ -109,16 +109,13 @@ if uploaded_file is not None:
             high_defects = 0
             defect_count = {}
 
-        # ✅ NEW: defect types saved as JSON
         defects_json = json.dumps(defect_count, ensure_ascii=False)
 
-        # Save images
         orig_path, ann_path = save_images(image, result_image, prefix=st.session_state.user)
         st.success("✅ Saved images:")
         st.write(orig_path)
         st.write(ann_path)
 
-        # ✅ Insert to DB (source=image + defects_json)
         dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         insert_inspection(
             dt, st.session_state.user, "image",
@@ -127,7 +124,6 @@ if uploaded_file is not None:
             defects_json
         )
 
-        # ---------------- PDF GENERATION ----------------
         pdf_path = "Fabric_Report.pdf"
         doc = SimpleDocTemplate(pdf_path, pagesize=A4)
         elements = []
@@ -169,7 +165,6 @@ if uploaded_file is not None:
                 mime="application/pdf",
             )
 
-        # ---------------- EMAIL ----------------
         st.subheader("📧 Email PDF Report (Gmail)")
         with st.expander("Send report via Email", expanded=False):
             sender_email = st.text_input(
