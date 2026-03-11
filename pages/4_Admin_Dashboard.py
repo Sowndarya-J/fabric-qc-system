@@ -7,8 +7,14 @@ from utils import read_inspections, delete_inspection, load_users, save_users, i
 
 st.title("🛠 Admin Dashboard")
 
+# -----------------------------
+# INIT DB
+# -----------------------------
 init_db()
 
+# -----------------------------
+# AUTH CHECK
+# -----------------------------
 if not st.session_state.get("logged_in", False):
     st.warning("Please Login first (Go to Login page).")
     st.stop()
@@ -17,6 +23,9 @@ if st.session_state.get("role") != "admin":
     st.error("❌ Only Admin can access this page.")
     st.stop()
 
+# -----------------------------
+# USER MANAGEMENT
+# -----------------------------
 st.header("👤 User Management")
 USERS = load_users()
 
@@ -41,16 +50,20 @@ with st.expander("📋 View All Users", expanded=False):
     st.table(pd.DataFrame(user_table))
 
 with st.expander("🗑 Delete User", expanded=False):
-    del_user = st.selectbox("Select user to delete", list(USERS.keys()))
-    if st.button("Delete Selected User"):
-        if del_user == "admin":
-            st.error("You cannot delete the main admin.")
-        else:
-            USERS.pop(del_user, None)
-            save_users(USERS)
-            st.success(f"Deleted user: {del_user}")
-            st.rerun()
+    if USERS:
+        del_user = st.selectbox("Select user to delete", list(USERS.keys()))
+        if st.button("Delete Selected User"):
+            if del_user == "admin":
+                st.error("You cannot delete the main admin.")
+            else:
+                USERS.pop(del_user, None)
+                save_users(USERS)
+                st.success(f"Deleted user: {del_user}")
+                st.rerun()
 
+# -----------------------------
+# LOAD DATABASE
+# -----------------------------
 st.header("📦 Inspection Database")
 db_df = read_inspections(limit=800)
 
@@ -58,31 +71,41 @@ if db_df.empty:
     st.info("No inspection records yet.")
     st.stop()
 
+# safer datetime handling
 db_df["dt"] = pd.to_datetime(db_df["dt"], errors="coerce")
 db_df = db_df.dropna(subset=["dt"])
 db_df["date"] = db_df["dt"].dt.date
 
+# ensure optional columns exist
 if "source" not in db_df.columns:
     db_df["source"] = "unknown"
+
 if "defects_json" not in db_df.columns:
     db_df["defects_json"] = "{}"
 
-def safe_load_defects(s):
+# -----------------------------
+# SAFE DEFECT JSON PARSER
+# -----------------------------
+def safe_load_defects(value):
     try:
-        if s is None or str(s).strip() == "":
+        if value is None or str(value).strip() == "":
             return {}
-        return json.loads(s)
-    except:
+        return json.loads(value)
+    except Exception:
         return {}
 
+# collect all defect names for filters / analytics
 all_defects = set()
-for s in db_df["defects_json"].tolist():
-    d = safe_load_defects(s)
+for item in db_df["defects_json"].tolist():
+    d = safe_load_defects(item)
     for k in d.keys():
         all_defects.add(k)
 
 all_defects = sorted(list(all_defects))
 
+# -----------------------------
+# SEARCH & FILTER
+# -----------------------------
 st.subheader("🔎 Search & Filter")
 
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -133,7 +156,7 @@ if selected_defect != "All":
 
 st.write(f"✅ Filtered records: **{len(filtered)}**")
 
-show_df = filtered.drop(columns=["date"])
+show_df = filtered.drop(columns=["date"], errors="ignore")
 st.dataframe(show_df, use_container_width=True)
 
 st.download_button(
@@ -143,6 +166,9 @@ st.download_button(
     mime="text/csv",
 )
 
+# -----------------------------
+# PREVIEW SAVED IMAGES
+# -----------------------------
 st.header("🖼 Preview Saved Images")
 
 if len(filtered) > 0:
@@ -154,6 +180,7 @@ if len(filtered) > 0:
     ann_path = str(row.get("ann_path", ""))
 
     cp1, cp2 = st.columns(2)
+
     with cp1:
         st.subheader("Original Image")
         if orig_path and os.path.exists(orig_path):
@@ -167,15 +194,42 @@ if len(filtered) > 0:
             st.image(ann_path, width=420)
         else:
             st.warning("Annotated image file not found.")
+
+    st.subheader("⬇️ Download Images")
+    d1, d2 = st.columns(2)
+
+    with d1:
+        if orig_path and os.path.exists(orig_path):
+            with open(orig_path, "rb") as f:
+                st.download_button(
+                    "Download Original",
+                    data=f,
+                    file_name=os.path.basename(orig_path),
+                    mime="image/jpeg"
+                )
+
+    with d2:
+        if ann_path and os.path.exists(ann_path):
+            with open(ann_path, "rb") as f:
+                st.download_button(
+                    "Download Annotated",
+                    data=f,
+                    file_name=os.path.basename(ann_path),
+                    mime="image/jpeg"
+                )
 else:
     st.info("No rows after filter. Adjust filters to preview images.")
 
+# -----------------------------
+# ANALYTICS DASHBOARD
+# -----------------------------
 st.header("📊 Analytics Dashboard")
 
 total_inspections = len(filtered)
-total_defects = int(filtered["total_defects"].sum())
+total_defects = int(filtered["total_defects"].sum()) if "total_defects" in filtered.columns else 0
 avg_defects = float(filtered["total_defects"].mean()) if total_inspections > 0 else 0.0
-reject_count = int((filtered["quality_status"] == "REJECT").sum())
+reject_count = int((filtered["quality_status"] == "REJECT").sum()) if "quality_status" in filtered.columns else 0
+pass_count = int((filtered["quality_status"] == "PASS").sum()) if "quality_status" in filtered.columns else 0
 
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Total Inspections", f"{total_inspections}")
@@ -183,8 +237,63 @@ m2.metric("Total Defects", f"{total_defects}")
 m3.metric("Avg Defects / Fabric", f"{avg_defects:.2f}")
 m4.metric("Reject Count", f"{reject_count}")
 
+st.subheader("📅 Defects Per Day")
+if "total_defects" in filtered.columns and len(filtered) > 0:
+    per_day = (
+        filtered.groupby("date")["total_defects"]
+        .sum()
+        .reset_index()
+        .sort_values("date")
+        .set_index("date")
+    )
+    st.line_chart(per_day)
+else:
+    st.info("No daily defect data available.")
+
+st.subheader("✅ PASS vs ❌ REJECT")
+status_counts = pd.DataFrame({
+    "status": ["PASS", "REJECT"],
+    "count": [pass_count, reject_count]
+}).set_index("status")
+st.bar_chart(status_counts)
+
+st.subheader("📸 Inspections by Source")
+if "source" in filtered.columns:
+    by_source = filtered["source"].value_counts().to_frame("count")
+    st.bar_chart(by_source)
+else:
+    st.info("No source data available.")
+
+# -----------------------------
+# MOST COMMON DEFECT
+# -----------------------------
+st.subheader("⭐ Most Common Defect Type")
+
+agg = {}
+for item in filtered["defects_json"].tolist():
+    d = safe_load_defects(item)
+    for k, v in d.items():
+        agg[k] = agg.get(k, 0) + int(v)
+
+if len(agg) == 0:
+    st.info("No defect type data available yet. Save some inspections first.")
+else:
+    most_common = max(agg.items(), key=lambda x: x[1])
+    st.success(f"Most common defect: **{most_common[0]}** (Total: {most_common[1]})")
+
+    st.subheader("📊 Top Defects (Count)")
+    agg_df = pd.DataFrame(
+        sorted(agg.items(), key=lambda x: x[1], reverse=True),
+        columns=["Defect", "Count"]
+    )
+    st.bar_chart(agg_df.set_index("Defect"))
+
+# -----------------------------
+# DELETE RECORD
+# -----------------------------
 st.subheader("🗑 Delete Inspection Record")
 del_id = st.number_input("Enter inspection ID to delete", min_value=0, step=1)
+
 if st.button("Delete Record"):
     if del_id > 0:
         delete_inspection(int(del_id))
