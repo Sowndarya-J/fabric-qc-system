@@ -19,6 +19,7 @@ if st.button("Login"):
         st.session_state.user = u
         st.session_state.role = USERS[u]["role"]
         st.success(f"Logged in as {u} ({st.session_state.role})")
+        st.rerun()
     else:
         st.error("Invalid username/password")
 
