@@ -7,7 +7,6 @@ from email.message import EmailMessage
 from pathlib import Path
 from datetime import datetime
 
-import cv2
 import numpy as np
 from PIL import Image
 import streamlit as st
@@ -103,6 +102,8 @@ def delete_inspection(row_id):
 
 # ---------- SAVE IMAGES ----------
 def save_images(original_pil: Image.Image, annotated_bgr: np.ndarray, prefix: str):
+    import cv2
+
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     base = f"{prefix}_{ts}"
 
@@ -117,6 +118,8 @@ def save_images(original_pil: Image.Image, annotated_bgr: np.ndarray, prefix: st
 
 # ---------- HEATMAP ----------
 def build_heatmap(img_shape, boxes_xyxy):
+    import cv2
+
     h, w = img_shape[:2]
     heat = np.zeros((h, w), dtype=np.float32)
 
