@@ -1,197 +1,163 @@
-import os
+import io
 import streamlit as st
-from streamlit_option_menu import option_menu
+import speech_recognition as sr
+from mic_recorder import mic_recorder
+from streamlit_chat import message
+from gtts import gTTS
+from openai import OpenAI
 
 from theme import apply_dark_theme
 
-st.set_page_config(
-    page_title="Fabric QC System",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 apply_dark_theme()
 
-if "lang" not in st.session_state:
-    st.session_state.lang = "English"
+st.title("🤖 Fabric Assistant")
 
-with st.sidebar:
-    st.markdown("## 🧵 Fabric QC System")
-    st.caption("AI-based Fabric Inspection")
+if not st.session_state.get("logged_in", False):
+    st.warning("Please login first.")
+    st.stop()
 
-    st.markdown("### Language")
-    st.session_state.lang = st.selectbox(
-        "Select Language",
-        ["English", "Tamil"],
-        index=0 if st.session_state.lang == "English" else 1,
-        label_visibility="collapsed",
-    )
+if "fabric_chat" not in st.session_state:
+    st.session_state.fabric_chat = []
 
-    st.markdown("---")
+if "assistant_voice_enabled" not in st.session_state:
+    st.session_state.assistant_voice_enabled = True
 
-    selected = option_menu(
-        menu_title=None,
-        options=[
-            "Home",
-            "Login",
-            "Image Upload",
-            "Live Webcam",
-            "Model Metrics",
-            "Admin Dashboard",
-            "Fabric Assistant",
-        ],
-        icons=[
-            "house",
-            "key",
-            "image",
-            "camera-video",
-            "bar-chart",
-            "gear",
-            "robot",
-        ],
-        default_index=0,
-        styles={
-            "container": {"padding": "0!important"},
-            "icon": {"font-size": "18px"},
-            "nav-link": {
-                "font-size": "15px",
-                "text-align": "left",
-                "margin": "5px",
-                "border-radius": "8px",
-            },
-            "nav-link-selected": {
-                "background-color": "#e11d48",
-                "color": "white",
-            },
-        },
-    )
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-    st.markdown("---")
+SYSTEM_PROMPT = """
+You are a helpful textile and fabric quality control expert assistant.
 
-    if st.session_state.get("logged_in", False):
-        user = st.session_state.get("user")
-        role = st.session_state.get("role")
+Your job is to answer questions about:
+- fabric defects
+- textile manufacturing
+- weaving defects
+- knitting defects
+- dyeing defects
+- fabric inspection
+- textile quality control
+- GSM, yarn count, warp, weft
+- AI-based fabric defect detection
+- industrial recommendations for defects
+- operator guidance and troubleshooting
 
-        st.success(f"👤 {user} ({role})")
-
-        if st.button("Logout", use_container_width=True):
-            st.session_state.logged_in = False
-            st.session_state.user = None
-            st.session_state.role = None
-            st.rerun()
-    else:
-        st.info("Please login first")
+Rules:
+- Explain clearly and simply.
+- Answer like a textile expert but make it easy for students and operators.
+- If the user asks about a fabric defect, explain:
+  1. what it is
+  2. common causes
+  3. prevention or solution
+- If the user asks about the project, explain it as an AI-based Fabric Defect Detection and Quality Control System.
+- Keep answers practical and relevant to textile/fabric topics.
+"""
 
 
-def run_page(path: str) -> None:
-    if not os.path.exists(path):
-        st.error(f"Page not found: {path}")
-        return
+def speech_to_text(audio_bytes: bytes) -> str:
+    recognizer = sr.Recognizer()
+    with io.BytesIO(audio_bytes) as wav_io:
+        with sr.AudioFile(wav_io) as source:
+            audio = recognizer.record(source)
+    return recognizer.recognize_google(audio)
 
+
+def speak_text(text: str) -> None:
+    tts = gTTS(text=text, lang="en")
+    fp = io.BytesIO()
+    tts.write_to_fp(fp)
+    fp.seek(0)
+    st.audio(fp.read(), format="audio/mp3")
+
+
+st.markdown(
+    """
+    <div class="soft-box">
+        <b>Ask anything about fabrics, textile defects, quality control, or your project.</b><br><br>
+        Example questions:<br>
+        • What is oil stain defect?<br>
+        • What causes hole defects in fabric?<br>
+        • What is warp and weft?<br>
+        • How does this project work?<br>
+        • How to reduce reject rate in fabric inspection?<br>
+        • What is GSM in fabric?
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+c1, c2 = st.columns([3, 1])
+with c1:
+    typed_question = st.text_input("Type your question")
+with c2:
+    st.toggle("Voice Reply", key="assistant_voice_enabled")
+
+st.subheader("🎤 Voice Input")
+
+audio = mic_recorder(
+    start_prompt="Start Talking",
+    stop_prompt="Stop Recording",
+    just_once=True,
+    use_container_width=True,
+    key="fabric_assistant_mic",
+)
+
+voice_question = ""
+
+if audio:
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            code = f.read()
-        exec(compile(code, path, "exec"), globals(), globals())
+        voice_question = speech_to_text(audio["bytes"])
+        st.success("Voice recognized successfully")
+        st.text_area("Recognized Speech", value=voice_question, height=100)
     except Exception as e:
-        st.error(f"Error loading page: {path}")
-        st.exception(e)
+        st.error(f"Voice recognition failed: {e}")
 
+question = typed_question.strip() if typed_question.strip() else voice_question.strip()
 
-if selected == "Home":
-    st.markdown(
-        """
-        <div class="hero-box">
-            <h1>Fabric Defect Detection System</h1>
-            <p>
-                AI-powered textile inspection platform for image upload detection,
-                mobile camera capture, model analytics, admin monitoring,
-                and fabric assistant support.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+col_ask, col_clear = st.columns(2)
 
-    st.subheader("Modules")
+with col_ask:
+    ask_clicked = st.button("Ask Assistant", use_container_width=True)
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(
-            """
-            <div class="card-box">
-                <h4>🔐 Login</h4>
-                <p>Admin and operator login with secure access control.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with c2:
-        st.markdown(
-            """
-            <div class="card-box">
-                <h4>🖼 Image Upload</h4>
-                <p>Upload fabric images and detect defects instantly.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with c3:
-        st.markdown(
-            """
-            <div class="card-box">
-                <h4>📷 Live Webcam</h4>
-                <p>Capture fabric directly using webcam or mobile camera.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+with col_clear:
+    clear_clicked = st.button("Clear Chat", use_container_width=True)
 
-    d1, d2, d3 = st.columns(3)
-    with d1:
-        st.markdown(
-            """
-            <div class="card-box">
-                <h4>📊 Model Metrics</h4>
-                <p>View training results such as precision, recall, and mAP.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with d2:
-        st.markdown(
-            """
-            <div class="card-box">
-                <h4>🛠 Admin Dashboard</h4>
-                <p>Monitor inspections, defects, trends, and operator performance.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with d3:
-        st.markdown(
-            """
-            <div class="card-box">
-                <h4>🤖 Fabric Assistant</h4>
-                <p>Ask fabric-related questions using chat or voice recognition.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+if clear_clicked:
+    st.session_state.fabric_chat = []
+    st.rerun()
 
-elif selected == "Login":
-    run_page("pages/1_Login.py")
+if ask_clicked:
+    if not question:
+        st.warning("Please type or speak a question first.")
+    else:
+        st.session_state.fabric_chat.append({"role": "user", "content": question})
 
-elif selected == "Image Upload":
-    run_page("pages/3_Image_Upload.py")
+        messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}] + st.session_state.fabric_chat
 
-elif selected == "Live Webcam":
-    run_page("pages/2_Webcam_Realtime.py")
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages_for_api,
+                temperature=0.4,
+            )
 
-elif selected == "Model Metrics":
-    run_page("pages/5_Model_Metrics.py")
+            answer = response.choices[0].message.content.strip()
 
-elif selected == "Admin Dashboard":
-    run_page("pages/4_Admin_Dashboard.py")
+            st.session_state.fabric_chat.append({"role": "assistant", "content": answer})
 
-elif selected == "Fabric Assistant":
-    run_page("pages/7_Fabric_Assistant.py")
+        except Exception as e:
+            st.error(f"Assistant error: {e}")
+
+if st.session_state.fabric_chat:
+    st.subheader("💬 Chat")
+
+    for i, chat in enumerate(st.session_state.fabric_chat):
+        if chat["role"] == "user":
+            message(chat["content"], is_user=True, key=f"user_{i}")
+        else:
+            message(chat["content"], key=f"assistant_{i}")
+
+    last_msg = st.session_state.fabric_chat[-1]
+    if (
+        last_msg["role"] == "assistant"
+        and st.session_state.assistant_voice_enabled
+    ):
+        speak_text(last_msg["content"])
