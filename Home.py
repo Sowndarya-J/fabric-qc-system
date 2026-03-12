@@ -11,18 +11,24 @@ st.set_page_config(
 
 apply_dark_theme()
 
-# Hide default Streamlit multipage navigation
+# Hide Streamlit default multipage navigation completely
 st.markdown("""
 <style>
-section[data-testid="stSidebarNav"] {
+[data-testid="stSidebarNav"] {
     display: none !important;
+}
+
+button[kind="header"] {
+    display: none !important;
+}
+
+section[data-testid="stSidebar"] > div:first-child {
+    padding-top: 0rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-
 # ---------------- SIDEBAR ---------------- #
-
 with st.sidebar:
     st.markdown("## 🧵 Fabric QC System")
     st.caption("AI-based Fabric Inspection")
@@ -92,7 +98,6 @@ with st.sidebar:
 
 
 # ---------------- PAGE LOADER ---------------- #
-
 def run_page(path: str):
     if not os.path.exists(path):
         st.error(f"Page not found: {path}")
@@ -101,7 +106,6 @@ def run_page(path: str):
     try:
         with open(path, "r", encoding="utf-8") as f:
             code = f.read()
-
         exec(compile(code, path, "exec"), globals(), globals())
 
     except Exception as e:
@@ -110,17 +114,15 @@ def run_page(path: str):
 
 
 # ---------------- HOME PAGE ---------------- #
-
 if selected == "Home":
-
     st.markdown("""
     <div class="hero-box">
-    <h1>Fabric Defect Detection System</h1>
-    <p>
-    AI-powered textile inspection platform for image upload detection,
-    live webcam capture, model analytics, admin monitoring,
-    and fabric assistant support.
-    </p>
+        <h1>Fabric Defect Detection System</h1>
+        <p>
+            AI-powered textile inspection platform for image upload detection,
+            live webcam capture, model analytics, admin monitoring,
+            and fabric assistant support.
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -131,24 +133,24 @@ if selected == "Home":
     with c1:
         st.markdown("""
         <div class="card-box">
-        <h4>🔐 Login</h4>
-        <p>Admin and operator login with secure access control.</p>
+            <h4>🔐 Login</h4>
+            <p>Admin and operator login with secure access control.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with c2:
         st.markdown("""
         <div class="card-box">
-        <h4>🖼 Image Upload</h4>
-        <p>Upload fabric images and detect defects instantly.</p>
+            <h4>🖼 Image Upload</h4>
+            <p>Upload fabric images and detect defects instantly.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with c3:
         st.markdown("""
         <div class="card-box">
-        <h4>📷 Live Webcam</h4>
-        <p>Capture fabric directly using webcam or mobile camera.</p>
+            <h4>📷 Live Webcam</h4>
+            <p>Capture fabric directly using webcam or mobile camera.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -157,30 +159,29 @@ if selected == "Home":
     with d1:
         st.markdown("""
         <div class="card-box">
-        <h4>📊 Model Metrics</h4>
-        <p>View training results such as precision, recall and mAP.</p>
+            <h4>📊 Model Metrics</h4>
+            <p>View training results such as precision, recall and mAP.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with d2:
         st.markdown("""
         <div class="card-box">
-        <h4>🛠 Admin Dashboard</h4>
-        <p>Monitor inspections, defects, trends and operator performance.</p>
+            <h4>🛠 Admin Dashboard</h4>
+            <p>Monitor inspections, defects, trends and operator performance.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with d3:
         st.markdown("""
         <div class="card-box">
-        <h4>🤖 Fabric Assistant</h4>
-        <p>Ask fabric-related questions using a ChatGPT-style layout.</p>
+            <h4>🤖 Fabric Assistant</h4>
+            <p>Ask fabric-related questions using a ChatGPT-style layout.</p>
         </div>
         """, unsafe_allow_html=True)
 
 
 # ---------------- PAGE ROUTING ---------------- #
-
 elif selected == "Login":
     run_page("pages/1_Login.py")
 
