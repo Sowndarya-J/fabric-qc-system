@@ -12,20 +12,9 @@ st.set_page_config(
 
 apply_dark_theme()
 
-if "lang" not in st.session_state:
-    st.session_state.lang = "English"
-
 with st.sidebar:
     st.markdown("## 🧵 Fabric QC System")
     st.caption("AI-based Fabric Inspection")
-
-    st.markdown("### Language")
-    st.session_state.lang = st.selectbox(
-        "Select Language",
-        ["English", "Tamil"],
-        index=0 if st.session_state.lang == "English" else 1,
-        label_visibility="collapsed",
-    )
 
     st.markdown("---")
 
