@@ -54,16 +54,6 @@ if "captured_frame_bgr" not in st.session_state:
 
 start_camera = st.toggle("Start Camera", value=False)
 
-m1, m2, m3, m4 = st.columns(4)
-with m1:
-    batch_no = st.text_input("Batch No", value="")
-with m2:
-    fabric_type = st.selectbox("Fabric Type", ["Cotton", "Polyester", "Silk", "Denim", "Other"])
-with m3:
-    shift = st.selectbox("Shift", ["Morning", "Afternoon", "Night"])
-with m4:
-    machine_id = st.text_input("Machine ID", value="M-01")
-
 confidence_threshold = st.slider(
     "Confidence Threshold",
     min_value=0.30,
@@ -194,7 +184,7 @@ if detect_clicked:
         st.session_state.detected_max_conf = round(max(confs), 4) if confs else 0.0
 
         if status == "REJECT":
-            play_alert_sound()
+            play_alert_sound("high")
 
         st.success("Detection completed.")
 
@@ -219,9 +209,9 @@ if st.session_state.detected_frame_bgr is not None:
         st.info("No defects detected.")
 
     if status == "PASS":
-        st.success(f"Quality Status: PASS")
+        st.success("Quality Status: PASS")
     else:
-        st.error(f"Quality Status: REJECT")
+        st.error("Quality Status: REJECT")
 
     st.info(f"Severity Score: {severity_score} ({severity_label})")
     st.warning(f"Recommendations: {recommendations}")
@@ -254,10 +244,10 @@ if save_clicked:
             dt,
             st.session_state.user,
             f"camera-capture-{facing_mode}",
-            batch_no,
-            fabric_type,
-            shift,
-            machine_id,
+            "",
+            "",
+            "",
+            "",
             st.session_state.detected_total,
             st.session_state.detected_high,
             st.session_state.detected_status,
