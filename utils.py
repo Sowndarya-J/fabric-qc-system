@@ -34,60 +34,7 @@ DB_PATH = "fabric_inspections.db"
 SAVE_DIR = Path("saved_inspections")
 SAVE_DIR.mkdir(exist_ok=True)
 
-TEXTS = {
-    "English": {
-        "home": "Home",
-        "login": "Login",
-        "image_upload": "Image Upload",
-        "live_webcam": "Live Webcam",
-        "model_metrics": "Model Metrics",
-        "admin_dashboard": "Admin Dashboard",
-        "language": "Language",
-        "batch_no": "Batch No",
-        "fabric_type": "Fabric Type",
-        "shift": "Shift",
-        "machine_id": "Machine ID",
-        "operator": "Operator",
-        "confidence_threshold": "Confidence Threshold",
-        "save_result": "Save Result",
-        "detect": "Detect",
-        "retake": "Retake",
-        "capture": "Capture",
-        "quality_status": "Quality Status",
-        "severity_score": "Severity Score",
-        "recommendations": "Recommendations",
-    },
-    "Tamil": {
-        "home": "முகப்பு",
-        "login": "உள்நுழைவு",
-        "image_upload": "படம் பதிவேற்று",
-        "live_webcam": "நேரடி கேமரா",
-        "model_metrics": "மாதிரி அளவுகள்",
-        "admin_dashboard": "அட்மின் டாஷ்போர்ட்",
-        "language": "மொழி",
-        "batch_no": "பேட்ச் எண்",
-        "fabric_type": "துணி வகை",
-        "shift": "ஷிப்ட்",
-        "machine_id": "மெஷின் ஐடி",
-        "operator": "ஆபரேட்டர்",
-        "confidence_threshold": "நம்பகத்தன்மை அளவு",
-        "save_result": "முடிவை சேமி",
-        "detect": "கண்டறி",
-        "retake": "மீண்டும் எடு",
-        "capture": "படம் எடு",
-        "quality_status": "தர நிலை",
-        "severity_score": "கடுமை மதிப்பெண்",
-        "recommendations": "பரிந்துரைகள்",
-    }
-}
 
-
-def t(key: str) -> str:
-    lang = st.session_state.get("lang", "English")
-    return TEXTS.get(lang, TEXTS["English"]).get(key, key)
-
-
-# ---------- USERS ----------
 def load_users():
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, "r", encoding="utf-8") as f:
@@ -100,14 +47,12 @@ def save_users(users_dict):
         json.dump(users_dict, f, indent=2)
 
 
-# ---------- MODEL ----------
 @st.cache_resource
 def get_model():
     from ultralytics import YOLO
     return YOLO("best.pt")
 
 
-# ---------- DATABASE ----------
 def _column_exists(cur, table_name, column_name):
     cur.execute(f"PRAGMA table_info({table_name})")
     cols = [row[1] for row in cur.fetchall()]
@@ -233,7 +178,6 @@ def delete_inspection(row_id):
     con.close()
 
 
-# ---------- IMAGE SAVE ----------
 def save_images(original_pil: Image.Image, annotated_bgr: np.ndarray, prefix: str):
     if cv2 is None:
         raise RuntimeError("OpenCV is not available on this system.")
@@ -250,7 +194,6 @@ def save_images(original_pil: Image.Image, annotated_bgr: np.ndarray, prefix: st
     return str(original_path), str(annotated_path)
 
 
-# ---------- HEATMAP ----------
 def build_heatmap(img_shape, boxes_xyxy):
     if cv2 is None:
         raise RuntimeError("OpenCV is not available on this system.")
@@ -271,7 +214,6 @@ def build_heatmap(img_shape, boxes_xyxy):
     return heat_color
 
 
-# ---------- SCORING / RECOMMENDATIONS ----------
 def calculate_severity(total_defects, high_defects, avg_conf):
     score = min(100, (total_defects * 12) + (high_defects * 20) + (avg_conf * 20))
     if score < 30:
@@ -285,37 +227,61 @@ def calculate_severity(total_defects, high_defects, avg_conf):
 
 def defect_recommendations(defect_count: dict):
     recs = []
-    if "oil" in defect_count or "stain" in defect_count:
+    defect_keys = [k.lower() for k in defect_count.keys()]
+
+    if any("oil" in k or "stain" in k for k in defect_keys):
         recs.append("Check machine oil leakage and clean fabric path.")
-    if "hole" in defect_count:
+    if any("hole" in k for k in defect_keys):
         recs.append("Inspect needle damage and mechanical puncture points.")
-    if "crack" in defect_count:
+    if any("crack" in k for k in defect_keys):
         recs.append("Check fabric tension and handling process.")
-    if "knot" in defect_count:
+    if any("knot" in k for k in defect_keys):
         recs.append("Inspect yarn joining and threading quality.")
     if not recs:
         recs.append("No action needed. Fabric quality is acceptable.")
+
     return " | ".join(recs)
 
 
-# ---------- ALERT SOUND ----------
-def play_alert_sound():
+def play_alert_sound(level: str = "high"):
+    if level == "medium":
+        volume = 0.55
+        repeats = 2
+        duration = 0.20
+        gap = 0.06
+    else:
+        volume = 0.85
+        repeats = 3
+        duration = 0.22
+        gap = 0.05
+
     sr = 22050
-    duration = 0.18
-    freq = 880.0
-    volume = 0.35
-    n = int(sr * duration)
-    audio = bytearray()
-    for i in range(n):
-        sample = int(volume * 32767 * math.sin(2 * math.pi * freq * i / sr))
-        audio += int(sample).to_bytes(2, byteorder="little", signed=True)
+    freq = 1200.0
+
+    def tone_bytes(seconds: float, vol: float):
+        n = int(sr * seconds)
+        audio = bytearray()
+        for i in range(n):
+            sample = int(vol * 32767 * math.sin(2 * math.pi * freq * i / sr))
+            audio += int(sample).to_bytes(2, byteorder="little", signed=True)
+        return audio
+
+    def silence_bytes(seconds: float):
+        n = int(sr * seconds)
+        return bytearray(b"\x00\x00" * n)
+
+    full_audio = bytearray()
+    for i in range(repeats):
+        full_audio += tone_bytes(duration, volume)
+        if i < repeats - 1:
+            full_audio += silence_bytes(gap)
 
     bio = io.BytesIO()
     with wave.open(bio, "wb") as wf:
         wf.setnchannels(1)
         wf.setsampwidth(2)
         wf.setframerate(sr)
-        wf.writeframes(bytes(audio))
+        wf.writeframes(bytes(full_audio))
 
     b64 = base64.b64encode(bio.getvalue()).decode()
     st.markdown(
@@ -328,7 +294,6 @@ def play_alert_sound():
     )
 
 
-# ---------- EMAIL ----------
 def send_email_with_pdf(sender_email: str, app_password: str, receiver_email: str,
                         subject: str, body: str, pdf_path: str):
     if not os.path.exists(pdf_path):
@@ -356,14 +321,12 @@ def send_email_with_pdf(sender_email: str, app_password: str, receiver_email: st
         server.send_message(msg)
 
 
-# ---------- QR ----------
 def create_qr_image(data: str, out_path="inspection_qr.png"):
     img = qrcode.make(data)
     img.save(out_path)
     return out_path
 
 
-# ---------- PDF REPORT ----------
 def create_inspection_pdf(
     pdf_path,
     inspection_id,
@@ -428,7 +391,6 @@ def create_inspection_pdf(
         os.remove(qr_path)
 
 
-# ---------- DASHBOARD PDF ----------
 def create_dashboard_summary_pdf(filtered_df: pd.DataFrame, pdf_path="dashboard_summary.pdf"):
     styles = getSampleStyleSheet()
     doc = SimpleDocTemplate(pdf_path, pagesize=A4)
