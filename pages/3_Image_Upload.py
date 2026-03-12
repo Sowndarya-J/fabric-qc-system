@@ -39,16 +39,6 @@ if cv2 is None:
     st.error("OpenCV is not available.")
     st.stop()
 
-mc1, mc2, mc3, mc4 = st.columns(4)
-with mc1:
-    batch_no = st.text_input("Batch No", value="")
-with mc2:
-    fabric_type = st.selectbox("Fabric Type", ["Cotton", "Polyester", "Silk", "Denim", "Other"])
-with mc3:
-    shift = st.selectbox("Shift", ["Morning", "Afternoon", "Night"])
-with mc4:
-    machine_id = st.text_input("Machine ID", value="M-01")
-
 confidence_threshold = st.slider(
     "Confidence Threshold",
     min_value=0.30,
@@ -132,7 +122,7 @@ if uploaded_file is not None:
 
         if quality_status == "REJECT":
             st.error("Quality Status: REJECT")
-            play_alert_sound()
+            play_alert_sound("high")
         else:
             st.success("Quality Status: PASS")
 
@@ -156,10 +146,10 @@ if uploaded_file is not None:
             dt,
             st.session_state.user,
             "image",
-            batch_no,
-            fabric_type,
-            shift,
-            machine_id,
+            "",
+            "",
+            "",
+            "",
             total_defects,
             high_defects,
             quality_status,
@@ -180,10 +170,10 @@ if uploaded_file is not None:
             dt=dt,
             inspector=st.session_state.user,
             source="Image Upload",
-            batch_no=batch_no,
-            fabric_type=fabric_type,
-            shift=shift,
-            machine_id=machine_id,
+            batch_no="",
+            fabric_type="",
+            shift="",
+            machine_id="",
             confidence_threshold=confidence_threshold,
             quality_status=quality_status,
             severity_score=severity_score,
