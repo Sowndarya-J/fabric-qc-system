@@ -10,3 +10,9 @@ ultralytics
 av
 streamlit-webrtc
 qrcode
+openai
+streamlit-chat
+streamlit-mic-recorder
+SpeechRecognition
+pydub
+gTTS
