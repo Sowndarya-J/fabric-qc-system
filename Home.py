@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 from streamlit_option_menu import option_menu
+from utils import t
 
 st.set_page_config(
     page_title="Fabric QC System",
@@ -8,99 +9,99 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# -----------------------------
-# CLEAN STYLING
-# -----------------------------
 st.markdown("""
 <style>
 section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] {display:none;}
 
+.stApp {
+    background: linear-gradient(180deg, #020617 0%, #0f172a 100%);
+    color: #e5e7eb;
+}
+
 .block-container {
-    padding-top: 2rem;
+    padding-top: 1.5rem;
     padding-bottom: 2rem;
 }
 
 .hero {
-    padding: 2.2rem 2rem;
-    border-radius: 20px;
-    background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
-    border: 1px solid #e5e7eb;
-    margin-bottom: 1.2rem;
+    padding: 2rem;
+    border-radius: 24px;
+    background: linear-gradient(135deg, #111827 0%, #1e293b 60%, #0f172a 100%);
+    border: 1px solid #334155;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.30);
+    margin-bottom: 1rem;
 }
 
 .hero-title {
-    font-size: 2.4rem;
+    font-size: 2.5rem;
     font-weight: 800;
-    color: #111827;
+    color: #f8fafc;
     margin-bottom: 0.4rem;
-    line-height: 1.2;
 }
 
-.hero-subtitle {
-    font-size: 1.05rem;
-    color: #4b5563;
+.hero-sub {
+    font-size: 1rem;
+    color: #cbd5e1;
     line-height: 1.7;
 }
 
 .tag {
     display: inline-block;
     padding: 0.45rem 0.85rem;
-    margin: 0.35rem 0.35rem 0 0;
+    margin: 0.5rem 0.4rem 0 0;
     border-radius: 999px;
-    background: white;
-    border: 1px solid #dbeafe;
-    color: #1d4ed8;
-    font-size: 0.88rem;
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #93c5fd;
+    font-size: 0.86rem;
     font-weight: 600;
 }
 
 .card {
-    padding: 1.2rem;
+    padding: 1rem;
     border-radius: 18px;
-    background: white;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-    min-height: 170px;
+    background: #111827;
+    border: 1px solid #334155;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.20);
+    min-height: 155px;
+    color: #e5e7eb;
 }
 
-.card-title {
-    font-size: 1.08rem;
-    font-weight: 700;
-    color: #111827;
+.card h4 {
     margin-bottom: 0.45rem;
+    color: #f8fafc;
 }
 
-.card-text {
-    font-size: 0.95rem;
-    color: #4b5563;
-    line-height: 1.65;
+.card p {
+    color: #cbd5e1;
+    font-size: 0.94rem;
+    line-height: 1.6;
 }
 
 .section-title {
     font-size: 1.35rem;
-    font-weight: 750;
-    color: #111827;
+    font-weight: 800;
+    color: #f8fafc;
     margin: 1rem 0 0.8rem 0;
 }
 
 .step {
-    padding: 1rem 1rem 0.9rem 1rem;
+    padding: 1rem;
     border-radius: 16px;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
+    background: #0f172a;
+    border: 1px solid #334155;
     min-height: 120px;
 }
 
 .step-no {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
-    background: #111827;
+    background: #2563eb;
     color: white;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.9rem;
     font-weight: 700;
     margin-bottom: 0.6rem;
 }
@@ -108,75 +109,71 @@ section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] {display:none;}
 .step-title {
     font-size: 1rem;
     font-weight: 700;
-    color: #111827;
-    margin-bottom: 0.3rem;
+    color: #f8fafc;
 }
 
 .step-text {
     font-size: 0.92rem;
-    color: #4b5563;
+    color: #cbd5e1;
     line-height: 1.6;
+    margin-top: 0.25rem;
 }
 
 .status-box {
     padding: 1rem 1.1rem;
     border-radius: 16px;
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
-    margin-top: 0.6rem;
+    background: #111827;
+    border: 1px solid #334155;
+    color: #e5e7eb;
 }
 
-.sidebar-user {
-    padding: 0.8rem;
-    border-radius: 14px;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
+div[data-testid="stSidebar"] {
+    background: #020617;
+}
+
+div[data-testid="stSidebar"] * {
+    color: #e5e7eb !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------
-# SIDEBAR
-# -----------------------------
+if "lang" not in st.session_state:
+    st.session_state.lang = "English"
+
 with st.sidebar:
     st.markdown("## 🧵 Fabric QC System")
     st.caption("AI-based Fabric Inspection")
 
+    st.selectbox(t("language"), ["English", "Tamil"], key="lang")
+
     selected = option_menu(
         menu_title=None,
-        options=["Home", "Login", "Image Upload", "Live Webcam", "Model Metrics", "Admin Dashboard"],
+        options=[t("home"), t("login"), t("image_upload"), t("live_webcam"), t("model_metrics"), t("admin_dashboard")],
         icons=["house", "key", "image", "camera-video", "bar-chart", "gear"],
         default_index=0,
         styles={
-            "container": {"padding": "0!important"},
-            "icon": {"font-size": "18px"},
+            "container": {"padding": "0!important", "background-color": "#020617"},
+            "icon": {"font-size": "18px", "color": "#93c5fd"},
             "nav-link": {
                 "font-size": "15px",
                 "text-align": "left",
                 "margin": "4px",
                 "border-radius": "10px",
+                "background-color": "#0f172a",
+                "color": "#e5e7eb",
             },
             "nav-link-selected": {
-                "background-color": "#111827",
+                "background-color": "#1d4ed8",
+                "color": "white",
             },
         }
     )
 
     st.markdown("---")
-
     if st.session_state.get("logged_in", False):
         user = st.session_state.get("user")
         role = st.session_state.get("role")
-        st.markdown(
-            f"""
-            <div class="sidebar-user">
-                <b>👤 {user}</b><br>
-                <span style="color:#6b7280;">Role: {role}</span>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
+        st.success(f"👤 {user} ({role})")
         if st.button("Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.user = None
@@ -185,14 +182,10 @@ with st.sidebar:
     else:
         st.info("Please login to continue")
 
-# -----------------------------
-# SAFE PAGE LOADER
-# -----------------------------
 def run_page(path: str):
     if not os.path.exists(path):
         st.error(f"Page not found: {path}")
         return
-
     try:
         with open(path, "r", encoding="utf-8") as f:
             code = f.read()
@@ -201,88 +194,69 @@ def run_page(path: str):
         st.error(f"Error loading page: {path}")
         st.exception(e)
 
-# -----------------------------
-# HOME
-# -----------------------------
-if selected == "Home":
+if selected == t("home"):
     st.markdown("""
     <div class="hero">
         <div class="hero-title">Fabric Defect Detection & Quality Monitoring</div>
-        <div class="hero-subtitle">
-            Inspect fabric quality using AI-powered defect detection from uploaded images or mobile camera capture.
-            Monitor inspection history, analyze performance, and generate reports in one system.
+        <div class="hero-sub">
+            Premium AI-based textile inspection platform for image upload, mobile camera capture,
+            quality scoring, recommendations, analytics dashboard, PDF reports, and operator tracking.
         </div>
-        <div style="margin-top:0.9rem;">
+        <div>
             <span class="tag">YOLO Detection</span>
             <span class="tag">Mobile Camera</span>
-            <span class="tag">PDF Reports</span>
-            <span class="tag">Admin Dashboard</span>
-            <span class="tag">Quality Status</span>
+            <span class="tag">Severity Score</span>
+            <span class="tag">Auto Reports</span>
+            <span class="tag">Admin Analytics</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="section-title">Main Modules</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Core Modules</div>', unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("""
         <div class="card">
-            <div class="card-title">🔐 Login & Access</div>
-            <div class="card-text">
-                Secure access for Admin and Operator roles with controlled inspection workflow and user-level access.
-            </div>
+            <h4>🔐 Login & Access</h4>
+            <p>Admin and Operator login with role-based access for quality control workflow.</p>
         </div>
         """, unsafe_allow_html=True)
-
     with c2:
         st.markdown("""
         <div class="card">
-            <div class="card-title">🖼 Image Upload Detection</div>
-            <div class="card-text">
-                Upload a fabric image, detect visible defects, visualize output, and review the defect summary instantly.
-            </div>
+            <h4>🖼 Image Upload Detection</h4>
+            <p>Upload a fabric image, detect defects, calculate severity, and export PDF report.</p>
         </div>
         """, unsafe_allow_html=True)
-
     with c3:
         st.markdown("""
         <div class="card">
-            <div class="card-title">📷 Mobile Camera Inspection</div>
-            <div class="card-text">
-                Capture a frame from the phone camera, run AI detection, and save the inspection result to history.
-            </div>
+            <h4>📷 Mobile Camera Capture</h4>
+            <p>Capture fabric using back/front camera, detect defects, and save results instantly.</p>
         </div>
         """, unsafe_allow_html=True)
 
-    c4, c5, c6 = st.columns(3)
-    with c4:
+    d1, d2, d3 = st.columns(3)
+    with d1:
         st.markdown("""
         <div class="card">
-            <div class="card-title">📊 Model Metrics</div>
-            <div class="card-text">
-                Review training performance such as precision, recall, mAP@50, and mAP@50-95 from results.csv.
-            </div>
+            <h4>📊 Model Metrics</h4>
+            <p>Review training performance using Precision, Recall, mAP@50, and mAP@50-95.</p>
         </div>
         """, unsafe_allow_html=True)
-
-    with c5:
+    with d2:
         st.markdown("""
         <div class="card">
-            <div class="card-title">🛠 Admin Dashboard</div>
-            <div class="card-text">
-                Search records, filter inspections, preview saved outputs, and analyze defect trends across inspections.
-            </div>
+            <h4>🛠 Admin Dashboard</h4>
+            <p>Filter inspections, preview saved images, and track operator-level performance.</p>
         </div>
         """, unsafe_allow_html=True)
-
-    with c6:
+    with d3:
         st.markdown("""
         <div class="card">
-            <div class="card-title">📄 Reports & Email</div>
-            <div class="card-text">
-                Generate PDF reports and send inspection outputs through email for documentation and quality tracking.
-            </div>
+            <h4>📄 Reports & Alerts</h4>
+            <p>Generate QR-coded PDF reports and send auto-email alerts for reject cases.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -294,47 +268,43 @@ if selected == "Home":
         <div class="step">
             <div class="step-no">1</div>
             <div class="step-title">Input Fabric</div>
-            <div class="step-text">Upload an image or use the phone camera to capture the fabric surface.</div>
+            <div class="step-text">Upload image or capture from mobile camera.</div>
         </div>
         """, unsafe_allow_html=True)
-
     with s2:
         st.markdown("""
         <div class="step">
             <div class="step-no">2</div>
-            <div class="step-title">Run Detection</div>
-            <div class="step-text">The YOLO model scans the image and detects defects on the fabric.</div>
+            <div class="step-title">Run AI Detection</div>
+            <div class="step-text">YOLO finds defect regions and confidence values.</div>
         </div>
         """, unsafe_allow_html=True)
-
     with s3:
         st.markdown("""
         <div class="step">
             <div class="step-no">3</div>
             <div class="step-title">Quality Decision</div>
-            <div class="step-text">The system counts defects and marks the result as PASS or REJECT.</div>
+            <div class="step-text">System marks fabric as PASS or REJECT with severity score.</div>
         </div>
         """, unsafe_allow_html=True)
-
     with s4:
         st.markdown("""
         <div class="step">
             <div class="step-no">4</div>
-            <div class="step-title">Save & Review</div>
-            <div class="step-text">Store inspection results, generate reports, and review analytics later.</div>
+            <div class="step-title">Save & Analyze</div>
+            <div class="step-text">Store inspection history and review analytics later.</div>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown('<div class="section-title">System Status</div>', unsafe_allow_html=True)
-
     if st.session_state.get("logged_in", False):
         user = st.session_state.get("user")
         role = st.session_state.get("role")
         st.markdown(
             f"""
             <div class="status-box">
-                <b>Logged in:</b> {user} &nbsp;&nbsp; | &nbsp;&nbsp; <b>Role:</b> {role}<br>
-                Use the sidebar to continue with detection, metrics, or dashboard operations.
+                <b>Logged in:</b> {user} &nbsp; | &nbsp; <b>Role:</b> {role}<br>
+                Use the sidebar to continue with inspection, metrics, or dashboard operations.
             </div>
             """,
             unsafe_allow_html=True
@@ -343,21 +313,17 @@ if selected == "Home":
         st.markdown("""
         <div class="status-box">
             <b>Not logged in.</b><br>
-            Please login first to access image upload, live camera, and admin features.
+            Please login first to access image upload, camera, model metrics, and admin features.
         </div>
         """, unsafe_allow_html=True)
 
-elif selected == "Login":
+elif selected == t("login"):
     run_page("pages/1_Login.py")
-
-elif selected == "Image Upload":
+elif selected == t("image_upload"):
     run_page("pages/3_Image_Upload.py")
-
-elif selected == "Live Webcam":
+elif selected == t("live_webcam"):
     run_page("pages/2_Webcam_Realtime.py")
-
-elif selected == "Model Metrics":
+elif selected == t("model_metrics"):
     run_page("pages/5_Model_Metrics.py")
-
-elif selected == "Admin Dashboard":
+elif selected == t("admin_dashboard"):
     run_page("pages/4_Admin_Dashboard.py")
