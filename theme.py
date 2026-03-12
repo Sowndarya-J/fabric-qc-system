@@ -1,135 +1,118 @@
 import streamlit as st
 
 
-def apply_dark_theme() -> None:
-    st.markdown(
-        """
-        <style>
-        .stApp {
-            background: #0f172a;
-            color: #f8fafc;
-        }
+def apply_dark_theme():
 
-        html, body, [class*="css"] {
-            color: #f8fafc !important;
-        }
+    st.markdown("""
+    <style>
 
-        h1, h2, h3, h4, h5, h6,
-        p, span, div, label, li {
-            color: #f8fafc !important;
-        }
+    /* MAIN BACKGROUND */
 
-        section[data-testid="stSidebar"] {
-            background: #020617 !important;
-        }
+    .stApp {
+        background: linear-gradient(135deg,#fff1f2,#ffe4e6,#fbcfe8);
+        color:#3f0d12;
+    }
 
-        section[data-testid="stSidebar"] * {
-            color: #e5e7eb !important;
-        }
+    html, body, [class*="css"]  {
+        color:#3f0d12 !important;
+    }
 
-        section[data-testid="stSidebar"] div[data-testid="stSidebarNav"] {
-            display: none;
-        }
+    /* SIDEBAR */
 
-        .stTextInput input,
-        .stTextArea textarea,
-        .stNumberInput input,
-        div[data-baseweb="select"] > div,
-        div[data-baseweb="input"] > div,
-        .stDateInput input {
-            background: #111827 !important;
-            color: #ffffff !important;
-            border: 1px solid #334155 !important;
-        }
+    section[data-testid="stSidebar"]{
+        background: linear-gradient(180deg,#be123c,#fb7185);
+        color:white;
+    }
 
-        .stTextInput input::placeholder,
-        .stTextArea textarea::placeholder {
-            color: #94a3b8 !important;
-        }
+    section[data-testid="stSidebar"] *{
+        color:white !important;
+    }
 
-        label, .stSelectbox label, .stSlider label, .stFileUploader label,
-        .stDateInput label, .stNumberInput label, .stTextInput label,
-        .stTextArea label {
-            color: #f8fafc !important;
-            font-weight: 600 !important;
-        }
+    section[data-testid="stSidebar"] div[data-testid="stSidebarNav"]{
+        display:none;
+    }
 
-        .stButton > button {
-            background: #2563eb !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 10px !important;
-            font-weight: 600 !important;
-        }
+    /* HERO CARD */
 
-        .stButton > button:hover {
-            background: #1d4ed8 !important;
-        }
+    .hero-box{
+        background:linear-gradient(135deg,#f43f5e,#fb7185);
+        color:white;
+        padding:30px;
+        border-radius:20px;
+        box-shadow:0px 10px 25px rgba(0,0,0,0.15);
+        margin-bottom:25px;
+    }
 
-        div[data-testid="stMetric"] {
-            background: #111827 !important;
-            border: 1px solid #334155 !important;
-            border-radius: 14px !important;
-            padding: 10px !important;
-        }
+    /* CARD MODULES */
 
-        div[data-testid="stMetricLabel"],
-        div[data-testid="stMetricValue"] {
-            color: #f8fafc !important;
-        }
+    .card-box{
+        background:#ffffffcc;
+        padding:20px;
+        border-radius:18px;
+        box-shadow:0px 6px 18px rgba(0,0,0,0.15);
+        backdrop-filter:blur(10px);
+        min-height:150px;
+    }
 
-        div[data-testid="stDataFrame"] * {
-            color: #f8fafc !important;
-        }
+    /* INFO BOX */
 
-        table, th, td {
-            color: #f8fafc !important;
-        }
+    .soft-box{
+        background:#fff0f3;
+        padding:15px;
+        border-radius:15px;
+        border:1px solid #fda4af;
+    }
 
-        details {
-            background: #111827 !important;
-            border: 1px solid #334155 !important;
-            border-radius: 12px !important;
-            padding: 6px !important;
-        }
+    /* BUTTONS */
 
-        summary {
-            color: #f8fafc !important;
-            font-weight: 600 !important;
-        }
+    .stButton>button{
+        background:#e11d48;
+        color:white;
+        border-radius:10px;
+        border:none;
+        font-weight:600;
+        padding:8px 18px;
+    }
 
-        div[data-testid="stAlert"] {
-            border-radius: 12px !important;
-        }
+    .stButton>button:hover{
+        background:#be123c;
+        color:white;
+    }
 
-        code {
-            color: #93c5fd !important;
-        }
+    /* METRICS */
 
-        .hero-box {
-            padding: 24px;
-            border-radius: 20px;
-            background: linear-gradient(135deg, #111827, #1e293b);
-            border: 1px solid #334155;
-            margin-bottom: 18px;
-        }
+    div[data-testid="stMetric"]{
+        background:#fff0f3;
+        border-radius:15px;
+        padding:10px;
+        border:1px solid #fecdd3;
+    }
 
-        .card-box {
-            padding: 18px;
-            border-radius: 16px;
-            background: #111827;
-            border: 1px solid #334155;
-            min-height: 140px;
-            margin-bottom: 10px;
-        }
+    /* TABLE */
 
-        .soft-box {
-            padding: 14px;
-            border-radius: 14px;
-            background: #111827;
-            border: 1px solid #334155;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    table{
+        color:#3f0d12 !important;
+    }
+
+    th{
+        background:#fda4af !important;
+        color:#3f0d12 !important;
+    }
+
+    /* INPUT BOX */
+
+    .stTextInput input{
+        background:#fff;
+        border-radius:10px;
+        border:1px solid #fda4af;
+    }
+
+    /* CHAT */
+
+    .stChatMessage{
+        background:#fff0f3;
+        border-radius:12px;
+    }
+
+    </style>
+    """, unsafe_allow_html=True)
