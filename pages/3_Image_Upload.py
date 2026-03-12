@@ -11,34 +11,62 @@ import streamlit as st
 from PIL import Image
 from datetime import datetime
 
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image as RLImage
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
-from reportlab.lib.pagesizes import A4
-
 from utils import (
     get_model,
     save_images,
     build_heatmap,
     insert_inspection,
     send_email_with_pdf,
-    init_db
+    init_db,
+    next_inspection_id,
+    calculate_severity,
+    defect_recommendations,
+    create_inspection_pdf,
+    play_alert_sound,
+    t
 )
 
-st.title("🖼 Image Upload Detection")
+st.markdown("""
+<style>
+.dark-box {
+    padding: 16px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #111827, #1e293b);
+    border: 1px solid #334155;
+    color: #e5e7eb;
+    margin-bottom: 12px;
+}
+</style>
+""", unsafe_allow_html=True)
 
+st.title("🖼 Image Upload Detection")
 init_db()
 
 if not st.session_state.get("logged_in", False):
-    st.warning("Please Login first (Go to Login page).")
+    st.warning("Please Login first.")
     st.stop()
 
 if cv2 is None:
-    st.error("OpenCV is not available on this system.")
+    st.error("OpenCV is not available.")
     st.stop()
 
-confidence_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.25, 0.05)
+mc1, mc2, mc3, mc4 = st.columns(4)
+with mc1:
+    batch_no = st.text_input(t("batch_no"), value="")
+with mc2:
+    fabric_type = st.selectbox(t("fabric_type"), ["Cotton", "Polyester", "Silk", "Denim", "Other"])
+with mc3:
+    shift = st.selectbox(t("shift"), ["Morning", "Afternoon", "Night"])
+with mc4:
+    machine_id = st.text_input(t("machine_id"), value="M-01")
+
+confidence_threshold = st.slider(
+    t("confidence_threshold"),
+    min_value=0.30,
+    max_value=1.00,
+    value=0.60,
+    step=0.05
+)
 
 uploaded_file = st.file_uploader("Upload Fabric Image", type=["jpg", "png", "jpeg"])
 
@@ -46,9 +74,8 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded Image", width=500)
 
-    if st.button("Detect Defects (Image)"):
+    if st.button(t("detect"), use_container_width=True):
         model = get_model()
-
         results = model(image, conf=confidence_threshold)
         result = results[0]
         result_image = result.plot()
@@ -60,6 +87,7 @@ if uploaded_file is not None:
 
         defect_data = []
         defect_count = {}
+        confidences = []
         total_defects = 0
         quality_status = "PASS"
         high_defects = 0
@@ -68,11 +96,12 @@ if uploaded_file is not None:
             for box in boxes:
                 cls_id = int(box.cls[0])
                 conf = float(box.conf[0])
+                confidences.append(conf)
                 defect_name = names[cls_id]
 
                 if conf > 0.80:
                     severity = "High"
-                elif conf > 0.50:
+                elif conf > 0.60:
                     severity = "Medium"
                 else:
                     severity = "Low"
@@ -81,133 +110,118 @@ if uploaded_file is not None:
                 defect_count[defect_name] = defect_count.get(defect_name, 0) + 1
                 defect_data.append([defect_name, round(conf * 100, 2), severity])
 
-            st.subheader("📋 Defect Details")
             df = pd.DataFrame(defect_data, columns=["Defect Type", "Confidence (%)", "Severity"])
             st.table(df)
 
-            st.subheader("📊 Defect Distribution Chart")
             fig = plt.figure(figsize=(4, 4))
             plt.pie(defect_count.values(), labels=defect_count.keys(), autopct="%1.1f%%")
             plt.title("Defect Distribution")
             st.pyplot(fig)
 
-            st.subheader("🏭 Quality Decision")
             high_defects = sum(1 for d in defect_data if d[2] == "High")
-
             if high_defects > 0:
                 quality_status = "REJECT"
-                st.error("❌ QUALITY STATUS: REJECT (High Severity Defect Found)")
             elif total_defects <= 2:
                 quality_status = "PASS"
-                st.success("✅ QUALITY STATUS: PASS")
             else:
                 quality_status = "REJECT"
-                st.warning("⚠️ QUALITY STATUS: REJECT (Too Many Defects)")
 
-            st.subheader("🔥 Defect Heatmap")
             xyxy = boxes.xyxy.cpu().numpy()
             heat_color = build_heatmap(result_image.shape, xyxy)
             overlay = cv2.addWeighted(result_image, 0.7, heat_color, 0.3, 0)
             st.image(overlay, caption="Heatmap Overlay", width=500)
-
         else:
             df = pd.DataFrame([["No Defects", 0, "-"]], columns=["Defect Type", "Confidence (%)", "Severity"])
             st.success("🎉 No Defects Found — PERFECT FABRIC")
-            quality_status = "PASS"
-            total_defects = 0
-            high_defects = 0
             defect_count = {}
 
-        defects_json = json.dumps(defect_count, ensure_ascii=False)
+        avg_conf = round(sum(confidences) / len(confidences), 4) if confidences else 0.0
+        max_conf = round(max(confidences), 4) if confidences else 0.0
+        severity_score, severity_label = calculate_severity(total_defects, high_defects, avg_conf)
+        recommendations = defect_recommendations(defect_count)
+        inspection_id = next_inspection_id()
 
+        if quality_status == "REJECT":
+            st.error(f"❌ {t('quality_status')}: REJECT")
+            play_alert_sound()
+        else:
+            st.success(f"✅ {t('quality_status')}: PASS")
+
+        st.markdown(
+            f"""
+            <div class="dark-box">
+                <b>Inspection ID:</b> {inspection_id}<br>
+                <b>{t('severity_score')}:</b> {severity_score} ({severity_label})<br>
+                <b>{t('recommendations')}:</b> {recommendations}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        defects_json = json.dumps(defect_count, ensure_ascii=False)
         orig_path, ann_path = save_images(image, result_image, prefix=st.session_state.user)
-        st.success("✅ Saved images:")
-        st.write(orig_path)
-        st.write(ann_path)
 
         dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         insert_inspection(
-            dt, st.session_state.user, "image",
-            total_defects, high_defects, quality_status,
-            orig_path, ann_path,
+            inspection_id,
+            dt,
+            st.session_state.user,
+            "image",
+            batch_no,
+            fabric_type,
+            shift,
+            machine_id,
+            total_defects,
+            high_defects,
+            quality_status,
+            severity_score,
+            severity_label,
+            recommendations,
+            avg_conf,
+            max_conf,
+            orig_path,
+            ann_path,
             defects_json
         )
 
-        pdf_path = "Fabric_Report.pdf"
-        doc = SimpleDocTemplate(pdf_path, pagesize=A4)
-        elements = []
-        styles = getSampleStyleSheet()
-
-        elements.append(Paragraph("Fabric Defect Detection Report", styles["Heading1"]))
-        elements.append(Spacer(1, 0.3 * inch))
-        elements.append(Paragraph(f"Date: {dt}", styles["Normal"]))
-        elements.append(Spacer(1, 0.15 * inch))
-        elements.append(Paragraph(f"Inspector: {st.session_state.user}", styles["Normal"]))
-        elements.append(Spacer(1, 0.15 * inch))
-        elements.append(Paragraph("Source: Image Upload", styles["Normal"]))
-        elements.append(Spacer(1, 0.15 * inch))
-        elements.append(Paragraph(f"Confidence Threshold: {confidence_threshold}", styles["Normal"]))
-        elements.append(Spacer(1, 0.15 * inch))
-        elements.append(Paragraph(f"Quality Status: {quality_status}", styles["Normal"]))
-        elements.append(Spacer(1, 0.3 * inch))
-
-        data = [["Defect Type", "Confidence (%)", "Severity"]] + df.values.tolist()
-        table = Table(data)
-        table.setStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-            ("GRID", (0, 0), (-1, -1), 1, colors.black),
-        ])
-        elements.append(table)
-        elements.append(Spacer(1, 0.4 * inch))
-
-        temp_image_path = "detected_image.jpg"
-        Image.fromarray(result_image).save(temp_image_path)
-        elements.append(RLImage(temp_image_path, width=4 * inch, height=3 * inch))
-
-        doc.build(elements)
+        pdf_path = f"{inspection_id}_report.pdf"
+        create_inspection_pdf(
+            pdf_path=pdf_path,
+            inspection_id=inspection_id,
+            dt=dt,
+            inspector=st.session_state.user,
+            source="Image Upload",
+            batch_no=batch_no,
+            fabric_type=fabric_type,
+            shift=shift,
+            machine_id=machine_id,
+            confidence_threshold=confidence_threshold,
+            quality_status=quality_status,
+            severity_score=severity_score,
+            severity_label=severity_label,
+            recommendations=recommendations,
+            defect_df=df,
+            annotated_bgr=result_image
+        )
 
         with open(pdf_path, "rb") as f:
-            st.download_button(
-                "📄 Download PDF Report",
-                data=f,
-                file_name="Fabric_Report.pdf",
-                mime="application/pdf",
-            )
+            st.download_button("📄 Download PDF Report", data=f, file_name=pdf_path, mime="application/pdf")
 
-        st.subheader("📧 Email PDF Report (Gmail)")
-        with st.expander("Send report via Email", expanded=False):
-            sender_email = st.text_input(
-                "Sender Gmail",
-                value=st.secrets.get("SENDER_EMAIL", ""),
-                placeholder="yourgmail@gmail.com"
-            )
-            app_password = st.text_input(
-                "Gmail App Password",
-                value=st.secrets.get("APP_PASSWORD", ""),
-                type="password",
-                placeholder="16-character app password"
-            )
-            receiver_email = st.text_input("Receiver Email", placeholder="receiver@gmail.com")
+        with st.expander("📧 Email Report", expanded=False):
+            sender_email = st.text_input("Sender Gmail", value=st.secrets.get("SENDER_EMAIL", ""))
+            app_password = st.text_input("Gmail App Password", value=st.secrets.get("APP_PASSWORD", ""), type="password")
+            receiver_email = st.text_input("Receiver Email", value=st.secrets.get("RECEIVER_EMAIL", ""))
 
-            email_subject = st.text_input("Email Subject", value="Fabric Defect Detection Report")
-            email_body = st.text_area(
-                "Email Message",
-                value=f"Hi,\n\nPlease find attached the Fabric Defect Detection Report.\n\nInspector: {st.session_state.user}\nDate: {dt}\nQuality Status: {quality_status}\n\nThanks."
-            )
-
-            if st.button("📨 Send Email"):
+            if st.button("Send Email", use_container_width=True):
                 try:
-                    if not sender_email or not app_password or not receiver_email:
-                        st.warning("Please fill Receiver Email (Sender from secrets).")
-                    else:
-                        send_email_with_pdf(
-                            sender_email=sender_email.strip(),
-                            app_password=app_password.strip(),
-                            receiver_email=receiver_email.strip(),
-                            subject=email_subject.strip(),
-                            body=email_body,
-                            pdf_path=pdf_path
-                        )
-                        st.success("✅ Email sent successfully!")
+                    send_email_with_pdf(
+                        sender_email=sender_email.strip(),
+                        app_password=app_password.strip(),
+                        receiver_email=receiver_email.strip(),
+                        subject=f"Fabric Report - {inspection_id}",
+                        body=f"Inspection ID: {inspection_id}\nStatus: {quality_status}\nRecommendations: {recommendations}",
+                        pdf_path=pdf_path
+                    )
+                    st.success("✅ Email sent successfully!")
                 except Exception as e:
                     st.error(f"❌ Email failed: {e}")
