@@ -1,11 +1,16 @@
 import os
+import io
 import json
+import math
+import wave
+import base64
 import sqlite3
 import smtplib
 import ssl
 from email.message import EmailMessage
 from pathlib import Path
 from datetime import datetime
+from uuid import uuid4
 
 try:
     import cv2
@@ -14,12 +19,72 @@ except Exception:
 
 import numpy as np
 from PIL import Image
+import pandas as pd
+import qrcode
 import streamlit as st
+
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image as RLImage
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.lib.pagesizes import A4
 
 USERS_FILE = "users.json"
 DB_PATH = "fabric_inspections.db"
 SAVE_DIR = Path("saved_inspections")
 SAVE_DIR.mkdir(exist_ok=True)
+
+TEXTS = {
+    "English": {
+        "home": "Home",
+        "login": "Login",
+        "image_upload": "Image Upload",
+        "live_webcam": "Live Webcam",
+        "model_metrics": "Model Metrics",
+        "admin_dashboard": "Admin Dashboard",
+        "language": "Language",
+        "batch_no": "Batch No",
+        "fabric_type": "Fabric Type",
+        "shift": "Shift",
+        "machine_id": "Machine ID",
+        "operator": "Operator",
+        "confidence_threshold": "Confidence Threshold",
+        "save_result": "Save Result",
+        "detect": "Detect",
+        "retake": "Retake",
+        "capture": "Capture",
+        "quality_status": "Quality Status",
+        "severity_score": "Severity Score",
+        "recommendations": "Recommendations",
+    },
+    "Tamil": {
+        "home": "முகப்பு",
+        "login": "உள்நுழைவு",
+        "image_upload": "படம் பதிவேற்று",
+        "live_webcam": "நேரடி கேமரா",
+        "model_metrics": "மாதிரி அளவுகள்",
+        "admin_dashboard": "அட்மின் டாஷ்போர்ட்",
+        "language": "மொழி",
+        "batch_no": "பேட்ச் எண்",
+        "fabric_type": "துணி வகை",
+        "shift": "ஷிப்ட்",
+        "machine_id": "மெஷின் ஐடி",
+        "operator": "ஆபரேட்டர்",
+        "confidence_threshold": "நம்பகத்தன்மை அளவு",
+        "save_result": "முடிவை சேமி",
+        "detect": "கண்டறி",
+        "retake": "மீண்டும் எடு",
+        "capture": "படம் எடு",
+        "quality_status": "தர நிலை",
+        "severity_score": "கடுமை மதிப்பெண்",
+        "recommendations": "பரிந்துரைகள்",
+    }
+}
+
+
+def t(key: str) -> str:
+    lang = st.session_state.get("lang", "English")
+    return TEXTS.get(lang, TEXTS["English"]).get(key, key)
 
 
 # ---------- USERS ----------
@@ -35,16 +100,6 @@ def save_users(users_dict):
         json.dump(users_dict, f, indent=2)
 
 
-def check_login(username: str, password: str) -> bool:
-    users = load_users()
-    return username in users and users[username]["password"] == password
-
-
-def get_role(username: str) -> str:
-    users = load_users()
-    return users[username]["role"]
-
-
 # ---------- MODEL ----------
 @st.cache_resource
 def get_model():
@@ -53,41 +108,114 @@ def get_model():
 
 
 # ---------- DATABASE ----------
+def _column_exists(cur, table_name, column_name):
+    cur.execute(f"PRAGMA table_info({table_name})")
+    cols = [row[1] for row in cur.fetchall()]
+    return column_name in cols
+
+
 def init_db():
     con = sqlite3.connect(DB_PATH)
     cur = con.cursor()
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS inspections (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        inspection_id TEXT,
         dt TEXT,
         user TEXT,
         source TEXT,
+        batch_no TEXT,
+        fabric_type TEXT,
+        shift TEXT,
+        machine_id TEXT,
         total_defects INTEGER,
         high_severity INTEGER,
         quality_status TEXT,
+        severity_score REAL,
+        severity_label TEXT,
+        recommendations TEXT,
+        avg_confidence REAL,
+        max_confidence REAL,
         orig_path TEXT,
         ann_path TEXT,
         defects_json TEXT
     )
     """)
+
+    new_cols = {
+        "inspection_id": "TEXT",
+        "batch_no": "TEXT",
+        "fabric_type": "TEXT",
+        "shift": "TEXT",
+        "machine_id": "TEXT",
+        "severity_score": "REAL",
+        "severity_label": "TEXT",
+        "recommendations": "TEXT",
+        "avg_confidence": "REAL",
+        "max_confidence": "REAL",
+        "defects_json": "TEXT",
+        "source": "TEXT",
+    }
+
+    for col, dtype in new_cols.items():
+        if not _column_exists(cur, "inspections", col):
+            cur.execute(f"ALTER TABLE inspections ADD COLUMN {col} {dtype}")
+
     con.commit()
     con.close()
 
 
-def insert_inspection(dt, user, source, total, high, status, orig_path, ann_path, defects_json):
+def next_inspection_id():
+    now = datetime.now().strftime("%Y%m%d")
+    con = sqlite3.connect(DB_PATH)
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM inspections WHERE inspection_id LIKE ?", (f"FQC-{now}-%",))
+    count = cur.fetchone()[0] + 1
+    con.close()
+    return f"FQC-{now}-{count:03d}"
+
+
+def insert_inspection(
+    inspection_id,
+    dt,
+    user,
+    source,
+    batch_no,
+    fabric_type,
+    shift,
+    machine_id,
+    total,
+    high,
+    status,
+    severity_score,
+    severity_label,
+    recommendations,
+    avg_confidence,
+    max_confidence,
+    orig_path,
+    ann_path,
+    defects_json
+):
     con = sqlite3.connect(DB_PATH)
     cur = con.cursor()
     cur.execute("""
-    INSERT INTO inspections
-    (dt, user, source, total_defects, high_severity, quality_status, orig_path, ann_path, defects_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (dt, user, source, total, high, status, orig_path, ann_path, defects_json))
+    INSERT INTO inspections (
+        inspection_id, dt, user, source, batch_no, fabric_type, shift, machine_id,
+        total_defects, high_severity, quality_status, severity_score, severity_label,
+        recommendations, avg_confidence, max_confidence, orig_path, ann_path, defects_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        inspection_id, dt, user, source, batch_no, fabric_type, shift, machine_id,
+        total, high, status, severity_score, severity_label, recommendations,
+        avg_confidence, max_confidence, orig_path, ann_path, defects_json
+    ))
     con.commit()
     con.close()
 
 
-def read_inspections(limit=300):
-    import pandas as pd
+def read_inspections(limit=500):
     con = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query(
         f"SELECT * FROM inspections ORDER BY id DESC LIMIT {int(limit)}",
@@ -105,7 +233,7 @@ def delete_inspection(row_id):
     con.close()
 
 
-# ---------- SAVE IMAGES ----------
+# ---------- IMAGE SAVE ----------
 def save_images(original_pil: Image.Image, annotated_bgr: np.ndarray, prefix: str):
     if cv2 is None:
         raise RuntimeError("OpenCV is not available on this system.")
@@ -143,6 +271,63 @@ def build_heatmap(img_shape, boxes_xyxy):
     return heat_color
 
 
+# ---------- SCORING / RECOMMENDATIONS ----------
+def calculate_severity(total_defects, high_defects, avg_conf):
+    score = min(100, (total_defects * 12) + (high_defects * 20) + (avg_conf * 20))
+    if score < 30:
+        label = "Good"
+    elif score < 60:
+        label = "Moderate"
+    else:
+        label = "Poor"
+    return round(score, 2), label
+
+
+def defect_recommendations(defect_count: dict):
+    recs = []
+    if "oil" in defect_count or "stain" in defect_count:
+        recs.append("Check machine oil leakage and clean fabric path.")
+    if "hole" in defect_count:
+        recs.append("Inspect needle damage and mechanical puncture points.")
+    if "crack" in defect_count:
+        recs.append("Check fabric tension and handling process.")
+    if "knot" in defect_count:
+        recs.append("Inspect yarn joining and threading quality.")
+    if not recs:
+        recs.append("No action needed. Fabric quality is acceptable.")
+    return " | ".join(recs)
+
+
+# ---------- ALERT SOUND ----------
+def play_alert_sound():
+    sr = 22050
+    duration = 0.18
+    freq = 880.0
+    volume = 0.35
+    n = int(sr * duration)
+    audio = bytearray()
+    for i in range(n):
+        sample = int(volume * 32767 * math.sin(2 * math.pi * freq * i / sr))
+        audio += int(sample).to_bytes(2, byteorder="little", signed=True)
+
+    bio = io.BytesIO()
+    with wave.open(bio, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        wf.writeframes(bytes(audio))
+
+    b64 = base64.b64encode(bio.getvalue()).decode()
+    st.markdown(
+        f"""
+        <audio autoplay>
+            <source src="data:audio/wav;base64,{b64}" type="audio/wav">
+        </audio>
+        """,
+        unsafe_allow_html=True
+    )
+
+
 # ---------- EMAIL ----------
 def send_email_with_pdf(sender_email: str, app_password: str, receiver_email: str,
                         subject: str, body: str, pdf_path: str):
@@ -169,3 +354,118 @@ def send_email_with_pdf(sender_email: str, app_password: str, receiver_email: st
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
         server.login(sender_email, app_password)
         server.send_message(msg)
+
+
+# ---------- QR ----------
+def create_qr_image(data: str, out_path="inspection_qr.png"):
+    img = qrcode.make(data)
+    img.save(out_path)
+    return out_path
+
+
+# ---------- PDF REPORT ----------
+def create_inspection_pdf(
+    pdf_path,
+    inspection_id,
+    dt,
+    inspector,
+    source,
+    batch_no,
+    fabric_type,
+    shift,
+    machine_id,
+    confidence_threshold,
+    quality_status,
+    severity_score,
+    severity_label,
+    recommendations,
+    defect_df,
+    annotated_bgr
+):
+    styles = getSampleStyleSheet()
+    doc = SimpleDocTemplate(pdf_path, pagesize=A4)
+    elements = []
+
+    elements.append(Paragraph("Fabric Defect Detection Report", styles["Heading1"]))
+    elements.append(Spacer(1, 0.2 * inch))
+    elements.append(Paragraph(f"Inspection ID: {inspection_id}", styles["Normal"]))
+    elements.append(Paragraph(f"Date: {dt}", styles["Normal"]))
+    elements.append(Paragraph(f"Inspector: {inspector}", styles["Normal"]))
+    elements.append(Paragraph(f"Source: {source}", styles["Normal"]))
+    elements.append(Paragraph(f"Batch No: {batch_no}", styles["Normal"]))
+    elements.append(Paragraph(f"Fabric Type: {fabric_type}", styles["Normal"]))
+    elements.append(Paragraph(f"Shift: {shift}", styles["Normal"]))
+    elements.append(Paragraph(f"Machine ID: {machine_id}", styles["Normal"]))
+    elements.append(Paragraph(f"Confidence Threshold: {confidence_threshold}", styles["Normal"]))
+    elements.append(Paragraph(f"Quality Status: {quality_status}", styles["Normal"]))
+    elements.append(Paragraph(f"Severity Score: {severity_score} ({severity_label})", styles["Normal"]))
+    elements.append(Paragraph(f"Recommendations: {recommendations}", styles["Normal"]))
+    elements.append(Spacer(1, 0.25 * inch))
+
+    table_data = [["Defect Type", "Confidence (%)", "Severity"]] + defect_df.values.tolist()
+    table = Table(table_data)
+    table.setStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+        ("GRID", (0, 0), (-1, -1), 1, colors.black),
+    ])
+    elements.append(table)
+    elements.append(Spacer(1, 0.25 * inch))
+
+    temp_img = f"annotated_{uuid4().hex[:8]}.jpg"
+    Image.fromarray(annotated_bgr).save(temp_img)
+    elements.append(RLImage(temp_img, width=4 * inch, height=3 * inch))
+    elements.append(Spacer(1, 0.25 * inch))
+
+    qr_path = create_qr_image(inspection_id)
+    elements.append(Paragraph("Inspection QR", styles["Heading3"]))
+    elements.append(RLImage(qr_path, width=1.4 * inch, height=1.4 * inch))
+
+    doc.build(elements)
+
+    if os.path.exists(temp_img):
+        os.remove(temp_img)
+    if os.path.exists(qr_path):
+        os.remove(qr_path)
+
+
+# ---------- DASHBOARD PDF ----------
+def create_dashboard_summary_pdf(filtered_df: pd.DataFrame, pdf_path="dashboard_summary.pdf"):
+    styles = getSampleStyleSheet()
+    doc = SimpleDocTemplate(pdf_path, pagesize=A4)
+    elements = []
+
+    elements.append(Paragraph("Fabric QC Dashboard Summary", styles["Heading1"]))
+    elements.append(Spacer(1, 0.2 * inch))
+    elements.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles["Normal"]))
+    elements.append(Spacer(1, 0.2 * inch))
+
+    total_inspections = len(filtered_df)
+    total_defects = int(filtered_df["total_defects"].sum()) if "total_defects" in filtered_df.columns else 0
+    reject_count = int((filtered_df["quality_status"] == "REJECT").sum()) if "quality_status" in filtered_df.columns else 0
+
+    summary_table = Table([
+        ["Metric", "Value"],
+        ["Total Inspections", str(total_inspections)],
+        ["Total Defects", str(total_defects)],
+        ["Reject Count", str(reject_count)],
+    ])
+    summary_table.setStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+        ("GRID", (0, 0), (-1, -1), 1, colors.black),
+    ])
+    elements.append(summary_table)
+    elements.append(Spacer(1, 0.25 * inch))
+
+    preview_cols = [c for c in ["inspection_id", "dt", "user", "source", "batch_no", "fabric_type", "quality_status"] if c in filtered_df.columns]
+    preview_df = filtered_df[preview_cols].head(15)
+
+    preview_table = Table([preview_cols] + preview_df.astype(str).values.tolist())
+    preview_table.setStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0, 0), (-1, -1), 1, colors.black),
+    ])
+    elements.append(Paragraph("Top Records Preview", styles["Heading2"]))
+    elements.append(preview_table)
+
+    doc.build(elements)
+    return pdf_path
