@@ -1,36 +1,30 @@
-import json
 import os
-
-import pandas as pd
+import json
 import streamlit as st
+import pandas as pd
 
 from theme import apply_dark_theme
-from utils import (
-    create_dashboard_summary_pdf,
-    delete_inspection,
-    init_db,
-    load_users,
-    read_inspections,
-    save_users,
-)
+from utils import read_inspections, delete_inspection, load_users, save_users
 
 apply_dark_theme()
 
-st.title("Admin Dashboard")
-init_db()
+st.title("🛠 Admin Dashboard")
 
 if not st.session_state.get("logged_in", False):
-    st.warning("Please login first.")
+    st.warning("Please Login first (Go to Login page).")
     st.stop()
 
 if st.session_state.get("role") != "admin":
-    st.error("Only Admin can access this page.")
+    st.error("❌ Only Admin can access this page.")
     st.stop()
 
-st.subheader("User Management")
-users = load_users()
+# -----------------------------
+# USER MANAGEMENT
+# -----------------------------
+st.header("👤 User Management")
+USERS = load_users()
 
-with st.expander("Create New User"):
+with st.expander("➕ Create New User", expanded=False):
     new_user = st.text_input("New Username")
     new_pass = st.text_input("New Password", type="password")
     new_role = st.selectbox("Role", ["operator", "admin"], index=0)
@@ -38,93 +32,111 @@ with st.expander("Create New User"):
     if st.button("Create User"):
         if not new_user or not new_pass:
             st.warning("Username and password required.")
-        elif new_user in users:
+        elif new_user in USERS:
             st.error("User already exists.")
         else:
-            users[new_user] = {"password": new_pass, "role": new_role}
-            save_users(users)
-            st.success(f"Created user: {new_user} ({new_role})")
+            USERS[new_user] = {"password": new_pass, "role": new_role}
+            save_users(USERS)
+            st.success(f"✅ Created user: {new_user} ({new_role})")
             st.rerun()
 
-with st.expander("View All Users"):
-    st.table(pd.DataFrame([{"Username": k, "Role": v["role"]} for k, v in users.items()]))
+with st.expander("📋 View All Users", expanded=False):
+    user_table = [{"Username": k, "Role": v["role"]} for k, v in USERS.items()]
+    st.table(pd.DataFrame(user_table))
 
-st.subheader("Inspection Database")
-df = read_inspections(limit=1000)
+with st.expander("🗑 Delete User", expanded=False):
+    del_user = st.selectbox("Select user to delete", list(USERS.keys()))
+    if st.button("Delete Selected User"):
+        if del_user == "admin":
+            st.error("You cannot delete the main admin.")
+        else:
+            USERS.pop(del_user, None)
+            save_users(USERS)
+            st.success(f"Deleted user: {del_user}")
+            st.rerun()
 
-if df.empty:
+# -----------------------------
+# LOAD DB
+# -----------------------------
+st.header("📦 Inspection Database")
+db_df = read_inspections(limit=800)
+
+if db_df.empty:
     st.info("No inspection records yet.")
     st.stop()
 
-df["dt"] = pd.to_datetime(df["dt"], errors="coerce")
-df = df.dropna(subset=["dt"])
-df["date"] = df["dt"].dt.date
+db_df["dt"] = pd.to_datetime(db_df["dt"], errors="coerce")
+db_df = db_df.dropna(subset=["dt"])
+db_df["date"] = db_df["dt"].dt.date
 
-for col in [
-    "source",
-    "defects_json",
-    "batch_no",
-    "fabric_type",
-    "shift",
-    "machine_id",
-    "inspection_id",
-    "severity_score",
-    "avg_confidence",
-]:
-    if col not in df.columns:
-        df[col] = ""
+if "source" not in db_df.columns:
+    db_df["source"] = "unknown"
+if "defects_json" not in db_df.columns:
+    db_df["defects_json"] = "{}"
 
-def safe_load_defects(value):
+# -----------------------------
+# BUILD DEFECT LIST
+# -----------------------------
+def safe_load_defects(s):
     try:
-        if value is None or str(value).strip() == "":
+        if s is None or str(s).strip() == "":
             return {}
-        return json.loads(value)
+        return json.loads(s)
     except Exception:
         return {}
 
 all_defects = set()
-for item in df["defects_json"].tolist():
-    d = safe_load_defects(item)
+for s in db_df["defects_json"].tolist():
+    d = safe_load_defects(s)
     for k in d.keys():
         all_defects.add(k)
+
 all_defects = sorted(list(all_defects))
 
-st.subheader("Search & Filter")
+# -----------------------------
+# SEARCH & FILTER
+# -----------------------------
+st.subheader("🔎 Search & Filter")
 
-c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+c1, c2, c3, c4, c5 = st.columns(5)
 
 with c1:
-    min_date = df["date"].min()
-    max_date = df["date"].max()
+    min_date = db_df["date"].min()
+    max_date = db_df["date"].max()
     date_range = st.date_input("Date range", value=(min_date, max_date))
-with c2:
-    selected_user = st.selectbox("Operator", ["All"] + sorted(df["user"].astype(str).unique().tolist()))
-with c3:
-    selected_status = st.selectbox("Pass/Reject", ["All"] + sorted(df["quality_status"].astype(str).unique().tolist()))
-with c4:
-    selected_source = st.selectbox("Source", ["All"] + sorted(df["source"].astype(str).unique().tolist()))
-with c5:
-    selected_defect = st.selectbox("Defect Type", ["All"] + all_defects)
-with c6:
-    batch_values = sorted([x for x in df["batch_no"].astype(str).unique().tolist() if x.strip()])
-    selected_batch = st.selectbox("Batch", ["All"] + batch_values)
-with c7:
-    conf_filter = st.selectbox("Confidence Level", ["All", "Low (<0.5)", "Medium (0.5-0.8)", "High (>0.8)"])
 
-filtered = df.copy()
+with c2:
+    users_list = ["All"] + sorted(db_df["user"].astype(str).unique().tolist())
+    selected_user = st.selectbox("Operator", users_list)
+
+with c3:
+    status_list = ["All"] + sorted(db_df["quality_status"].astype(str).unique().tolist())
+    selected_status = st.selectbox("Pass/Reject", status_list)
+
+with c4:
+    source_list = ["All"] + sorted(db_df["source"].astype(str).unique().tolist())
+    selected_source = st.selectbox("Source", source_list)
+
+with c5:
+    defect_list = ["All"] + all_defects
+    selected_defect = st.selectbox("Defect Type", defect_list)
+
+filtered = db_df.copy()
 
 if isinstance(date_range, tuple) and len(date_range) == 2:
     start, end = date_range
     filtered = filtered[(filtered["date"] >= start) & (filtered["date"] <= end)]
+else:
+    filtered = filtered[filtered["date"] == date_range]
 
 if selected_user != "All":
     filtered = filtered[filtered["user"].astype(str) == selected_user]
+
 if selected_status != "All":
     filtered = filtered[filtered["quality_status"].astype(str) == selected_status]
+
 if selected_source != "All":
     filtered = filtered[filtered["source"].astype(str) == selected_source]
-if selected_batch != "All":
-    filtered = filtered[filtered["batch_no"].astype(str) == selected_batch]
 
 if selected_defect != "All":
     def has_defect(x):
@@ -132,31 +144,27 @@ if selected_defect != "All":
         return selected_defect in d and d[selected_defect] > 0
     filtered = filtered[filtered["defects_json"].apply(has_defect)]
 
-if conf_filter == "Low (<0.5)":
-    filtered = filtered[pd.to_numeric(filtered["avg_confidence"], errors="coerce") < 0.5]
-elif conf_filter == "Medium (0.5-0.8)":
-    confs = pd.to_numeric(filtered["avg_confidence"], errors="coerce")
-    filtered = filtered[(confs >= 0.5) & (confs <= 0.8)]
-elif conf_filter == "High (>0.8)":
-    filtered = filtered[pd.to_numeric(filtered["avg_confidence"], errors="coerce") > 0.8]
+st.write(f"✅ Filtered records: **{len(filtered)}**")
 
-st.info(f"Filtered records: {len(filtered)}")
-st.dataframe(filtered.drop(columns=["date"], errors="ignore"), use_container_width=True)
+show_df = filtered.drop(columns=["date"])
+st.dataframe(show_df, use_container_width=True)
 
 st.download_button(
-    "Download Filtered CSV",
-    data=filtered.drop(columns=["date"], errors="ignore").to_csv(index=False).encode("utf-8"),
+    "⬇️ Download Filtered CSV",
+    data=show_df.to_csv(index=False).encode("utf-8"),
     file_name="filtered_inspections.csv",
     mime="text/csv",
 )
 
-pdf_path = create_dashboard_summary_pdf(filtered)
-with open(pdf_path, "rb") as f:
-    st.download_button("Download Dashboard PDF Summary", data=f, file_name="dashboard_summary.pdf", mime="application/pdf")
+# -----------------------------
+# PREVIEW IMAGES
+# -----------------------------
+st.header("🖼 Preview Saved Images")
 
-st.subheader("Preview Saved Images")
 if len(filtered) > 0:
-    selected_id = st.selectbox("Select Inspection ID to preview", filtered["id"].tolist())
+    ids = filtered["id"].tolist()
+    selected_id = st.selectbox("Select Inspection ID to preview", ids)
+
     row = filtered[filtered["id"] == selected_id].iloc[0]
     orig_path = str(row.get("orig_path", ""))
     ann_path = str(row.get("ann_path", ""))
@@ -168,6 +176,7 @@ if len(filtered) > 0:
             st.image(orig_path, width=420)
         else:
             st.warning("Original image file not found.")
+
     with cp2:
         st.subheader("Annotated Image")
         if ann_path and os.path.exists(ann_path):
@@ -175,79 +184,96 @@ if len(filtered) > 0:
         else:
             st.warning("Annotated image file not found.")
 
-st.subheader("Analytics Dashboard")
+    st.subheader("⬇️ Download Images")
+    d1, d2 = st.columns(2)
+    with d1:
+        if orig_path and os.path.exists(orig_path):
+            with open(orig_path, "rb") as f:
+                st.download_button(
+                    "Download Original",
+                    data=f,
+                    file_name=os.path.basename(orig_path),
+                    mime="image/jpeg"
+                )
+    with d2:
+        if ann_path and os.path.exists(ann_path):
+            with open(ann_path, "rb") as f:
+                st.download_button(
+                    "Download Annotated",
+                    data=f,
+                    file_name=os.path.basename(ann_path),
+                    mime="image/jpeg"
+                )
+else:
+    st.info("No rows after filter. Adjust filters to preview images.")
+
+# -----------------------------
+# ANALYTICS DASHBOARD
+# -----------------------------
+st.header("📊 Analytics Dashboard")
 
 total_inspections = len(filtered)
-total_defects = int(filtered["total_defects"].sum()) if "total_defects" in filtered.columns else 0
+total_defects = int(filtered["total_defects"].sum())
 avg_defects = float(filtered["total_defects"].mean()) if total_inspections > 0 else 0.0
-reject_count = int((filtered["quality_status"] == "REJECT").sum()) if "quality_status" in filtered.columns else 0
-pass_count = int((filtered["quality_status"] == "PASS").sum()) if "quality_status" in filtered.columns else 0
+reject_count = int((filtered["quality_status"] == "REJECT").sum())
 
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Total Inspections", total_inspections)
-m2.metric("Total Defects", total_defects)
+m1.metric("Total Inspections", f"{total_inspections}")
+m2.metric("Total Defects", f"{total_defects}")
 m3.metric("Avg Defects / Fabric", f"{avg_defects:.2f}")
-m4.metric("Reject Count", reject_count)
+m4.metric("Reject Count", f"{reject_count}")
 
-st.subheader("Defects Per Day")
-if len(filtered) > 0 and "total_defects" in filtered.columns:
-    per_day = filtered.groupby("date")["total_defects"].sum().reset_index().sort_values("date")
-    if len(per_day) >= 2:
-        chart_df = per_day.copy()
-        chart_df["date"] = pd.to_datetime(chart_df["date"])
-        st.line_chart(chart_df.set_index("date")["total_defects"])
-    else:
-        st.info("Only one date available, showing bar chart.")
-        st.bar_chart(per_day.set_index("date")["total_defects"])
-    with st.expander("View table: Defects Per Day"):
-        per_day.columns = ["Date", "Total Defects"]
-        st.dataframe(per_day, use_container_width=True)
+st.subheader("📅 Defects Per Day")
+per_day = (
+    filtered.groupby("date")["total_defects"]
+    .sum()
+    .reset_index()
+    .sort_values("date")
+)
 
-st.subheader("PASS vs REJECT")
-status_counts = pd.DataFrame({"Status": ["PASS", "REJECT"], "Count": [pass_count, reject_count]})
-st.bar_chart(status_counts.set_index("Status"))
-with st.expander("View table: PASS / REJECT"):
-    st.dataframe(status_counts, use_container_width=True)
+if len(per_day) >= 2:
+    chart_df = per_day.copy()
+    chart_df["date"] = pd.to_datetime(chart_df["date"])
+    chart_df = chart_df.set_index("date")
+    st.line_chart(chart_df["total_defects"])
+else:
+    st.bar_chart(per_day.set_index("date")["total_defects"])
 
-st.subheader("Inspections by Source")
-if len(filtered) > 0:
-    by_source = filtered["source"].value_counts().reset_index()
-    by_source.columns = ["Source", "Count"]
-    st.bar_chart(by_source.set_index("Source"))
-    with st.expander("View table: Inspections by Source"):
-        st.dataframe(by_source, use_container_width=True)
+st.subheader("✅ PASS vs ❌ REJECT")
+status_counts = (
+    filtered["quality_status"]
+    .value_counts()
+    .rename_axis("status")
+    .reset_index(name="count")
+)
+st.bar_chart(status_counts.set_index("status"))
 
-st.subheader("Top Defects (Count)")
+st.subheader("📸 Inspections by Source")
+by_source = filtered["source"].value_counts().to_frame("count")
+st.bar_chart(by_source)
+
+st.subheader("⭐ Most Common Defect Type")
+
 agg = {}
-for item in filtered["defects_json"].tolist():
-    d = safe_load_defects(item)
+for s in filtered["defects_json"].tolist():
+    d = safe_load_defects(s)
     for k, v in d.items():
         agg[k] = agg.get(k, 0) + int(v)
 
-if agg:
+if len(agg) == 0:
+    st.info("No defect type data available yet. Save some inspections first.")
+else:
+    most_common = max(agg.items(), key=lambda x: x[1])
+    st.success(f"Most common defect: **{most_common[0]}** (Total: {most_common[1]})")
+
+    st.subheader("📊 Top Defects (Count)")
     agg_df = pd.DataFrame(sorted(agg.items(), key=lambda x: x[1], reverse=True), columns=["Defect", "Count"])
     st.bar_chart(agg_df.set_index("Defect"))
-    with st.expander("View table: Top Defects"):
-        st.dataframe(agg_df, use_container_width=True)
-else:
-    st.info("No defect type data available.")
 
-st.subheader("Operator Performance")
-if len(filtered) > 0:
-    op_df = (
-        filtered.groupby("user")
-        .agg(
-            inspections=("id", "count"),
-            rejects=("quality_status", lambda s: (s == "REJECT").sum()),
-            avg_defects=("total_defects", "mean"),
-        )
-        .reset_index()
-    )
-    st.bar_chart(op_df.set_index("user")[["inspections", "rejects"]])
-    with st.expander("View table: Operator Performance"):
-        st.dataframe(op_df, use_container_width=True)
-
-st.subheader("Delete Inspection Record")
+# -----------------------------
+# DELETE RECORD
+# -----------------------------
+st.subheader("🗑 Delete Inspection Record")
 del_id = st.number_input("Enter inspection ID to delete", min_value=0, step=1)
 if st.button("Delete Record"):
     if del_id > 0:
