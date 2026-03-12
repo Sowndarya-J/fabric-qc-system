@@ -51,16 +51,18 @@ with st.sidebar:
         ],
         default_index=0,
         styles={
-            "container": {"padding": "0!important"},
-            "icon": {"font-size": "18px"},
+            "container": {"padding": "0!important", "background-color": "#000000"},
+            "icon": {"font-size": "18px", "color": "#ff3b3b"},
             "nav-link": {
                 "font-size": "15px",
                 "text-align": "left",
                 "margin": "5px",
                 "border-radius": "8px",
+                "background-color": "#111111",
+                "color": "#ffffff",
             },
             "nav-link-selected": {
-                "background-color": "#e11d48",
+                "background-color": "#ff3b3b",
                 "color": "white",
             },
         },
@@ -71,7 +73,6 @@ with st.sidebar:
     if st.session_state.get("logged_in", False):
         user = st.session_state.get("user")
         role = st.session_state.get("role")
-
         st.success(f"👤 {user} ({role})")
 
         if st.button("Logout", use_container_width=True):
@@ -98,44 +99,94 @@ def run_page(path: str) -> None:
 
 
 if selected == "Home":
-    st.title("Fabric Defect Detection System")
+    st.markdown(
+        """
+        <div class="hero-box">
+            <h1>Fabric Defect Detection System</h1>
+            <p>
+                AI-powered textile inspection platform for image upload detection,
+                live webcam capture, model analytics, admin monitoring, and fabric assistant support.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    st.write("AI-powered textile inspection platform.")
+    st.subheader("Modules")
 
-    st.markdown("""
-### Modules
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(
+            """
+            <div class="card-box">
+                <h4>🔐 Login</h4>
+                <p>Admin and operator login with secure access control.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with c2:
+        st.markdown(
+            """
+            <div class="card-box">
+                <h4>🖼 Image Upload</h4>
+                <p>Upload fabric images and detect defects instantly.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with c3:
+        st.markdown(
+            """
+            <div class="card-box">
+                <h4>📷 Live Webcam</h4>
+                <p>Capture fabric directly using webcam or mobile camera.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-- 🔐 Login
-- 🖼 Image Upload Detection
-- 📷 Live Webcam Detection
-- 📊 Model Metrics
-- 🛠 Admin Dashboard
-- 🤖 Fabric Assistant
-
-### Features
-
-- YOLO Fabric Defect Detection
-- Mobile Camera Capture
-- Quality Status
-- PDF Report Generation
-- Admin Analytics
-- Fabric Question Assistant
-""")
+    d1, d2, d3 = st.columns(3)
+    with d1:
+        st.markdown(
+            """
+            <div class="card-box">
+                <h4>📊 Model Metrics</h4>
+                <p>View training results such as precision, recall, and mAP.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with d2:
+        st.markdown(
+            """
+            <div class="card-box">
+                <h4>🛠 Admin Dashboard</h4>
+                <p>Monitor inspections, defects, trends, and operator performance.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with d3:
+        st.markdown(
+            """
+            <div class="card-box">
+                <h4>🤖 Fabric Assistant</h4>
+                <p>Ask fabric-related questions using a ChatGPT-style layout.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 elif selected == "Login":
     run_page("pages/1_Login.py")
-
 elif selected == "Image Upload":
     run_page("pages/3_Image_Upload.py")
-
 elif selected == "Live Webcam":
     run_page("pages/2_Webcam_Realtime.py")
-
 elif selected == "Model Metrics":
     run_page("pages/5_Model_Metrics.py")
-
 elif selected == "Admin Dashboard":
     run_page("pages/4_Admin_Dashboard.py")
-
 elif selected == "Fabric Assistant":
     run_page("pages/7_Fabric_Assistant.py")
