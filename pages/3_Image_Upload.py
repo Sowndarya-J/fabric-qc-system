@@ -1,49 +1,38 @@
 import json
+from datetime import datetime
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import streamlit as st
+from PIL import Image
+
+from theme import apply_dark_theme
+from utils import (
+    build_heatmap,
+    calculate_severity,
+    create_inspection_pdf,
+    defect_recommendations,
+    get_model,
+    init_db,
+    insert_inspection,
+    next_inspection_id,
+    play_alert_sound,
+    save_images,
+    send_email_with_pdf,
+)
 
 try:
     import cv2
 except Exception:
     cv2 = None
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import streamlit as st
-from PIL import Image
-from datetime import datetime
+apply_dark_theme()
 
-from utils import (
-    get_model,
-    save_images,
-    build_heatmap,
-    insert_inspection,
-    send_email_with_pdf,
-    init_db,
-    next_inspection_id,
-    calculate_severity,
-    defect_recommendations,
-    create_inspection_pdf,
-    play_alert_sound,
-    t
-)
-
-st.markdown("""
-<style>
-.dark-box {
-    padding: 16px;
-    border-radius: 18px;
-    background: linear-gradient(135deg, #111827, #1e293b);
-    border: 1px solid #334155;
-    color: #e5e7eb;
-    margin-bottom: 12px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.title("🖼 Image Upload Detection")
+st.title("Image Upload Detection")
 init_db()
 
 if not st.session_state.get("logged_in", False):
-    st.warning("Please Login first.")
+    st.warning("Please login first.")
     st.stop()
 
 if cv2 is None:
@@ -52,20 +41,20 @@ if cv2 is None:
 
 mc1, mc2, mc3, mc4 = st.columns(4)
 with mc1:
-    batch_no = st.text_input(t("batch_no"), value="")
+    batch_no = st.text_input("Batch No", value="")
 with mc2:
-    fabric_type = st.selectbox(t("fabric_type"), ["Cotton", "Polyester", "Silk", "Denim", "Other"])
+    fabric_type = st.selectbox("Fabric Type", ["Cotton", "Polyester", "Silk", "Denim", "Other"])
 with mc3:
-    shift = st.selectbox(t("shift"), ["Morning", "Afternoon", "Night"])
+    shift = st.selectbox("Shift", ["Morning", "Afternoon", "Night"])
 with mc4:
-    machine_id = st.text_input(t("machine_id"), value="M-01")
+    machine_id = st.text_input("Machine ID", value="M-01")
 
 confidence_threshold = st.slider(
-    t("confidence_threshold"),
+    "Confidence Threshold",
     min_value=0.30,
     max_value=1.00,
     value=0.60,
-    step=0.05
+    step=0.05,
 )
 
 uploaded_file = st.file_uploader("Upload Fabric Image", type=["jpg", "png", "jpeg"])
@@ -74,7 +63,7 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded Image", width=500)
 
-    if st.button(t("detect"), use_container_width=True):
+    if st.button("Detect", use_container_width=True):
         model = get_model()
         results = model(image, conf=confidence_threshold)
         result = results[0]
@@ -132,7 +121,7 @@ if uploaded_file is not None:
             st.image(overlay, caption="Heatmap Overlay", width=500)
         else:
             df = pd.DataFrame([["No Defects", 0, "-"]], columns=["Defect Type", "Confidence (%)", "Severity"])
-            st.success("🎉 No Defects Found — PERFECT FABRIC")
+            st.success("No Defects Found — PERFECT FABRIC")
             defect_count = {}
 
         avg_conf = round(sum(confidences) / len(confidences), 4) if confidences else 0.0
@@ -142,20 +131,20 @@ if uploaded_file is not None:
         inspection_id = next_inspection_id()
 
         if quality_status == "REJECT":
-            st.error(f"❌ {t('quality_status')}: REJECT")
+            st.error("Quality Status: REJECT")
             play_alert_sound()
         else:
-            st.success(f"✅ {t('quality_status')}: PASS")
+            st.success("Quality Status: PASS")
 
         st.markdown(
             f"""
-            <div class="dark-box">
+            <div class="soft-box">
                 <b>Inspection ID:</b> {inspection_id}<br>
-                <b>{t('severity_score')}:</b> {severity_score} ({severity_label})<br>
-                <b>{t('recommendations')}:</b> {recommendations}
+                <b>Severity Score:</b> {severity_score} ({severity_label})<br>
+                <b>Recommendations:</b> {recommendations}
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
         defects_json = json.dumps(defect_count, ensure_ascii=False)
@@ -181,7 +170,7 @@ if uploaded_file is not None:
             max_conf,
             orig_path,
             ann_path,
-            defects_json
+            defects_json,
         )
 
         pdf_path = f"{inspection_id}_report.pdf"
@@ -201,13 +190,18 @@ if uploaded_file is not None:
             severity_label=severity_label,
             recommendations=recommendations,
             defect_df=df,
-            annotated_bgr=result_image
+            annotated_bgr=result_image,
         )
 
         with open(pdf_path, "rb") as f:
-            st.download_button("📄 Download PDF Report", data=f, file_name=pdf_path, mime="application/pdf")
+            st.download_button(
+                "Download PDF Report",
+                data=f,
+                file_name=pdf_path,
+                mime="application/pdf",
+            )
 
-        with st.expander("📧 Email Report", expanded=False):
+        with st.expander("Email Report", expanded=False):
             sender_email = st.text_input("Sender Gmail", value=st.secrets.get("SENDER_EMAIL", ""))
             app_password = st.text_input("Gmail App Password", value=st.secrets.get("APP_PASSWORD", ""), type="password")
             receiver_email = st.text_input("Receiver Email", value=st.secrets.get("RECEIVER_EMAIL", ""))
@@ -220,8 +214,8 @@ if uploaded_file is not None:
                         receiver_email=receiver_email.strip(),
                         subject=f"Fabric Report - {inspection_id}",
                         body=f"Inspection ID: {inspection_id}\nStatus: {quality_status}\nRecommendations: {recommendations}",
-                        pdf_path=pdf_path
+                        pdf_path=pdf_path,
                     )
-                    st.success("✅ Email sent successfully!")
+                    st.success("Email sent successfully!")
                 except Exception as e:
-                    st.error(f"❌ Email failed: {e}")
+                    st.error(f"Email failed: {e}")
