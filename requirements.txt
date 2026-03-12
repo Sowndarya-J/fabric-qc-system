@@ -9,3 +9,4 @@ reportlab
 ultralytics
 av
 streamlit-webrtc
+qrcode
