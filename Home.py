@@ -10,6 +10,18 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Hide Streamlit default multipage sidebar
+st.markdown("""
+<style>
+section[data-testid="stSidebarNav"] {
+    display: none !important;
+}
+header {
+    visibility: hidden;
+}
+</style>
+""", unsafe_allow_html=True)
+
 apply_dark_theme()
 
 with st.sidebar:
@@ -64,7 +76,7 @@ with st.sidebar:
         role = st.session_state.get("role")
         st.success(f"👤 {user} ({role})")
 
-        if st.button("Logout", use_container_width=True):
+        if st.button("Logout", use_container_width=True, key="sidebar_logout_btn"):
             st.session_state.logged_in = False
             st.session_state.user = None
             st.session_state.role = None
@@ -169,13 +181,18 @@ if selected == "Home":
 
 elif selected == "Login":
     run_page("pages/1_Login.py")
+
 elif selected == "Image Upload":
     run_page("pages/3_Image_Upload.py")
+
 elif selected == "Live Webcam":
     run_page("pages/2_Webcam_Realtime.py")
+
 elif selected == "Model Metrics":
     run_page("pages/5_Model_Metrics.py")
+
 elif selected == "Admin Dashboard":
     run_page("pages/4_Admin_Dashboard.py")
+
 elif selected == "Fabric Assistant":
     run_page("pages/7_Fabric_Assistant.py")
