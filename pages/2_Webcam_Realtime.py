@@ -2,54 +2,43 @@ import json
 from datetime import datetime
 
 import av
+import pandas as pd
+import streamlit as st
+from PIL import Image
+from streamlit_webrtc import VideoProcessorBase, WebRtcMode, webrtc_streamer
+
+from theme import apply_dark_theme
+from utils import (
+    calculate_severity,
+    defect_recommendations,
+    get_model,
+    init_db,
+    insert_inspection,
+    next_inspection_id,
+    play_alert_sound,
+    save_images,
+)
 
 try:
     import cv2
 except Exception:
     cv2 = None
 
-import pandas as pd
-import streamlit as st
-from PIL import Image
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
+apply_dark_theme()
 
-from utils import (
-    get_model,
-    save_images,
-    insert_inspection,
-    init_db,
-    next_inspection_id,
-    calculate_severity,
-    defect_recommendations,
-    play_alert_sound,
-    t
-)
-
-st.markdown("""
-<style>
-.dark-panel {
-    padding: 16px;
-    border-radius: 18px;
-    background: linear-gradient(135deg, #111827, #1e293b);
-    border: 1px solid #334155;
-    color: #e5e7eb;
-    margin-bottom: 12px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.title("📷 Mobile-Style Camera Capture")
+st.title("Live Webcam Detection")
 init_db()
 
 if not st.session_state.get("logged_in", False):
-    st.warning("Please Login first.")
+    st.warning("Please login first.")
     st.stop()
 
 if cv2 is None:
     st.error("OpenCV is not available.")
     st.stop()
 
-def reset_camera_state():
+
+def reset_camera_state() -> None:
     st.session_state.captured_frame_bgr = None
     st.session_state.detected_frame_bgr = None
     st.session_state.detected_counts = {}
@@ -59,6 +48,7 @@ def reset_camera_state():
     st.session_state.detected_avg_conf = 0.0
     st.session_state.detected_max_conf = 0.0
 
+
 if "captured_frame_bgr" not in st.session_state:
     reset_camera_state()
 
@@ -66,20 +56,20 @@ start_camera = st.toggle("Start Camera", value=False)
 
 m1, m2, m3, m4 = st.columns(4)
 with m1:
-    batch_no = st.text_input(t("batch_no"), value="")
+    batch_no = st.text_input("Batch No", value="")
 with m2:
-    fabric_type = st.selectbox(t("fabric_type"), ["Cotton", "Polyester", "Silk", "Denim", "Other"])
+    fabric_type = st.selectbox("Fabric Type", ["Cotton", "Polyester", "Silk", "Denim", "Other"])
 with m3:
-    shift = st.selectbox(t("shift"), ["Morning", "Afternoon", "Night"])
+    shift = st.selectbox("Shift", ["Morning", "Afternoon", "Night"])
 with m4:
-    machine_id = st.text_input(t("machine_id"), value="M-01")
+    machine_id = st.text_input("Machine ID", value="M-01")
 
 confidence_threshold = st.slider(
-    t("confidence_threshold"),
+    "Confidence Threshold",
     min_value=0.30,
     max_value=1.00,
     value=0.60,
-    step=0.05
+    step=0.05,
 )
 
 c1, c2 = st.columns(2)
@@ -90,14 +80,16 @@ with c2:
 
 facing_mode = "environment" if cam_mode == "Back Camera" else "user"
 
+
 class CameraCaptureProcessor(VideoProcessorBase):
-    def __init__(self):
+    def __init__(self) -> None:
         self.last_frame = None
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
         img = frame.to_ndarray(format="bgr24")
         self.last_frame = img.copy()
         return av.VideoFrame.from_ndarray(img, format="bgr24")
+
 
 ctx = None
 if start_camera:
@@ -127,13 +119,13 @@ else:
 
 b1, b2, b3, b4 = st.columns(4)
 with b1:
-    capture_clicked = st.button(t("capture"), use_container_width=True)
+    capture_clicked = st.button("Capture", use_container_width=True)
 with b2:
-    detect_clicked = st.button(t("detect"), use_container_width=True)
+    detect_clicked = st.button("Detect", use_container_width=True)
 with b3:
-    retake_clicked = st.button(t("retake"), use_container_width=True)
+    retake_clicked = st.button("Retake", use_container_width=True)
 with b4:
-    save_clicked = st.button(t("save_result"), use_container_width=True)
+    save_clicked = st.button("Save Result", use_container_width=True)
 
 if retake_clicked:
     reset_camera_state()
@@ -145,12 +137,12 @@ if capture_clicked:
     elif ctx and ctx.video_processor and ctx.video_processor.last_frame is not None:
         st.session_state.captured_frame_bgr = ctx.video_processor.last_frame.copy()
         st.session_state.detected_frame_bgr = None
-        st.success("✅ Frame captured.")
+        st.success("Frame captured.")
     else:
         st.warning("No frame available yet. Wait a few seconds and try again.")
 
 if st.session_state.captured_frame_bgr is not None:
-    st.subheader("📌 Captured Frame")
+    st.subheader("Captured Frame")
     captured_rgb = cv2.cvtColor(st.session_state.captured_frame_bgr, cv2.COLOR_BGR2RGB)
     st.image(captured_rgb, caption="Captured Frame", use_column_width=True)
 
@@ -163,7 +155,7 @@ if detect_clicked:
             source=st.session_state.captured_frame_bgr,
             conf=float(confidence_threshold),
             imgsz=int(webcam_imgsz),
-            verbose=False
+            verbose=False,
         )
 
         r0 = res[0]
@@ -204,10 +196,10 @@ if detect_clicked:
         if status == "REJECT":
             play_alert_sound()
 
-        st.success("✅ Detection completed.")
+        st.success("Detection completed.")
 
 if st.session_state.detected_frame_bgr is not None:
-    st.subheader("🧠 Detection Result")
+    st.subheader("Detection Result")
     detected_rgb = cv2.cvtColor(st.session_state.detected_frame_bgr, cv2.COLOR_BGR2RGB)
     st.image(detected_rgb, caption="Detected Output", use_column_width=True)
 
@@ -227,12 +219,12 @@ if st.session_state.detected_frame_bgr is not None:
         st.info("No defects detected.")
 
     if status == "PASS":
-        st.success(f"✅ {t('quality_status')}: PASS")
+        st.success(f"Quality Status: PASS")
     else:
-        st.error(f"❌ {t('quality_status')}: REJECT")
+        st.error(f"Quality Status: REJECT")
 
-    st.info(f"{t('severity_score')}: {severity_score} ({severity_label})")
-    st.warning(f"{t('recommendations')}: {recommendations}")
+    st.info(f"Severity Score: {severity_score} ({severity_label})")
+    st.warning(f"Recommendations: {recommendations}")
 
 if save_clicked:
     if st.session_state.captured_frame_bgr is None or st.session_state.detected_frame_bgr is None:
@@ -245,14 +237,14 @@ if save_clicked:
         orig_path, ann_path = save_images(
             original_pil,
             st.session_state.detected_frame_bgr,
-            prefix=f"{facing_mode}_{st.session_state.user}"
+            prefix=f"{facing_mode}_{st.session_state.user}",
         )
 
         defects_json = json.dumps(st.session_state.detected_counts, ensure_ascii=False)
         severity_score, severity_label = calculate_severity(
             st.session_state.detected_total,
             st.session_state.detected_high,
-            st.session_state.detected_avg_conf
+            st.session_state.detected_avg_conf,
         )
         recommendations = defect_recommendations(st.session_state.detected_counts)
 
@@ -276,7 +268,7 @@ if save_clicked:
             st.session_state.detected_max_conf,
             orig_path,
             ann_path,
-            defects_json
+            defects_json,
         )
 
-        st.success(f"✅ Result saved. Inspection ID: {inspection_id}")
+        st.success(f"Result saved. Inspection ID: {inspection_id}")
