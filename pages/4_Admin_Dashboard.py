@@ -33,19 +33,11 @@ st.markdown("""
     color: #111827;
 }
 
-.section-box {
-    padding: 18px;
-    border-radius: 18px;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
-    margin-bottom: 16px;
-}
-
 .section-title {
     font-size: 20px;
     font-weight: 700;
     color: #111827;
+    margin-top: 10px;
     margin-bottom: 12px;
 }
 
@@ -56,6 +48,7 @@ st.markdown("""
     border: 1px solid #e5e7eb;
     color: #475569;
     font-size: 14px;
+    margin-bottom: 10px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -79,8 +72,7 @@ if st.session_state.get("role") != "admin":
 # -----------------------------
 # USER MANAGEMENT
 # -----------------------------
-with st.container():
-    st.markdown('<div class="section-title">👤 User Management</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">👤 User Management</div>', unsafe_allow_html=True)
 
 USERS = load_users()
 
@@ -283,6 +275,7 @@ total_inspections = len(filtered)
 total_defects = int(filtered["total_defects"].sum()) if "total_defects" in filtered.columns else 0
 avg_defects = float(filtered["total_defects"].mean()) if total_inspections > 0 else 0.0
 reject_count = int((filtered["quality_status"] == "REJECT").sum()) if "quality_status" in filtered.columns else 0
+pass_count = int((filtered["quality_status"] == "PASS").sum()) if "quality_status" in filtered.columns else 0
 
 m1, m2, m3, m4 = st.columns(4)
 with m1:
@@ -319,11 +312,20 @@ if "total_defects" in filtered.columns and len(filtered) > 0:
         .sort_values("date")
     )
 
-    st.line_chart(per_day.set_index("date"))
+    per_day_display = per_day.copy()
+    per_day_display.columns = ["Date", "Total Defects"]
+
+    if len(per_day) >= 2:
+        chart_df = per_day.copy()
+        chart_df["date"] = pd.to_datetime(chart_df["date"])
+        chart_df = chart_df.set_index("date")
+        st.line_chart(chart_df["total_defects"])
+    else:
+        st.info("Only one date is available, so bar chart is shown instead of line chart.")
+        bar_df = per_day.copy().set_index("date")
+        st.bar_chart(bar_df["total_defects"])
 
     with st.expander("View table: Defects Per Day", expanded=False):
-        per_day_display = per_day.copy()
-        per_day_display.columns = ["Date", "Total Defects"]
         st.dataframe(per_day_display, use_container_width=True)
 else:
     st.info("No daily defect data available.")
@@ -333,7 +335,6 @@ else:
 # -----------------------------
 st.subheader("✅ PASS vs ❌ REJECT")
 
-pass_count = int((filtered["quality_status"] == "PASS").sum()) if "quality_status" in filtered.columns else 0
 status_counts = pd.DataFrame({
     "Status": ["PASS", "REJECT"],
     "Count": [pass_count, reject_count]
