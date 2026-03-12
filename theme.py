@@ -14,6 +14,7 @@ def apply_dark_theme():
             color: #ffffff !important;
         }
 
+        /* Sidebar */
         section[data-testid="stSidebar"] {
             background-color: #000000 !important;
         }
@@ -22,6 +23,7 @@ def apply_dark_theme():
             color: #ffffff !important;
         }
 
+        /* Titles */
         h1 {
             color: #ff3b3b !important;
             font-weight: 800 !important;
@@ -35,12 +37,13 @@ def apply_dark_theme():
             color: #f3f4f6 !important;
         }
 
+        /* Inputs */
         .stTextInput input,
         .stTextArea textarea,
         .stNumberInput input,
+        .stDateInput input,
         div[data-baseweb="select"] > div,
-        div[data-baseweb="input"] > div,
-        .stDateInput input {
+        div[data-baseweb="input"] > div {
             background: #1a1a1a !important;
             color: #ffffff !important;
             border: 1px solid #444 !important;
@@ -52,6 +55,23 @@ def apply_dark_theme():
             color: #9ca3af !important;
         }
 
+        /* Dropdown popup */
+        ul[role="listbox"] {
+            background-color: #1a1a1a !important;
+            border: 1px solid #444 !important;
+        }
+
+        li[role="option"] {
+            background-color: #1a1a1a !important;
+            color: #ffffff !important;
+        }
+
+        li[role="option"]:hover {
+            background-color: #ff3b3b !important;
+            color: #ffffff !important;
+        }
+
+        /* Buttons */
         .stButton > button {
             background: #ff3b3b !important;
             color: #ffffff !important;
@@ -65,7 +85,8 @@ def apply_dark_theme():
             color: #ffffff !important;
         }
 
-        .soft-box {
+        /* Boxes */
+        .hero-box, .card-box, .soft-box {
             background: #1a1a1a !important;
             border: 1px solid #333 !important;
             border-left: 4px solid #ff3b3b !important;
@@ -73,18 +94,7 @@ def apply_dark_theme():
             padding: 16px !important;
         }
 
-        div[data-testid="stMetric"] {
-            background: #1a1a1a !important;
-            border: 1px solid #333 !important;
-            border-radius: 12px !important;
-            padding: 10px !important;
-        }
-
-        div[data-testid="stMetricLabel"],
-        div[data-testid="stMetricValue"] {
-            color: #ffffff !important;
-        }
-
+        /* Dataframe / table */
         div[data-testid="stDataFrame"] * {
             color: #ffffff !important;
         }
@@ -93,6 +103,7 @@ def apply_dark_theme():
             color: #ffffff !important;
         }
 
+        /* Expander */
         details {
             background: #1a1a1a !important;
             border: 1px solid #333 !important;
@@ -104,18 +115,17 @@ def apply_dark_theme():
             font-weight: 700 !important;
         }
 
-        ul[role="listbox"] {
-            background-color: #1a1a1a !important;
+        /* Metrics */
+        div[data-testid="stMetric"] {
+            background: #1a1a1a !important;
+            border: 1px solid #333 !important;
+            border-radius: 12px !important;
+            padding: 10px !important;
         }
 
-        li[role="option"] {
-            background-color: #1a1a1a !important;
-            color: white !important;
-        }
-
-        li[role="option"]:hover {
-            background-color: #ff3b3b !important;
-            color: white !important;
+        div[data-testid="stMetricLabel"],
+        div[data-testid="stMetricValue"] {
+            color: #ffffff !important;
         }
         </style>
         """,
