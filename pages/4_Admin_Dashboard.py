@@ -1,54 +1,36 @@
-import os
 import json
-import streamlit as st
-import pandas as pd
+import os
 
+import pandas as pd
+import streamlit as st
+
+from theme import apply_dark_theme
 from utils import (
-    read_inspections,
+    create_dashboard_summary_pdf,
     delete_inspection,
-    load_users,
-    save_users,
     init_db,
-    create_dashboard_summary_pdf
+    load_users,
+    read_inspections,
+    save_users,
 )
 
-st.title("🛠 Admin Dashboard")
+apply_dark_theme()
 
-st.markdown("""
-<style>
-.metric-card {
-    padding: 16px;
-    border-radius: 16px;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
-    margin-bottom: 8px;
-}
-.metric-title {font-size: 14px; color: #6b7280; margin-bottom: 8px;}
-.metric-value {font-size: 28px; font-weight: 800; color: #111827;}
-.section-title {font-size: 20px; font-weight: 700; color: #111827; margin-top: 10px; margin-bottom: 12px;}
-.soft-note {
-    padding: 12px 14px; border-radius: 14px; background: #f8fafc;
-    border: 1px solid #e5e7eb; color: #475569; font-size: 14px; margin-bottom: 10px;
-}
-</style>
-""", unsafe_allow_html=True)
-
+st.title("Admin Dashboard")
 init_db()
 
 if not st.session_state.get("logged_in", False):
-    st.warning("Please Login first.")
+    st.warning("Please login first.")
     st.stop()
 
 if st.session_state.get("role") != "admin":
-    st.error("❌ Only Admin can access this page.")
+    st.error("Only Admin can access this page.")
     st.stop()
 
-# ---------- User Management ----------
-st.markdown('<div class="section-title">👤 User Management</div>', unsafe_allow_html=True)
+st.subheader("User Management")
 users = load_users()
 
-with st.expander("➕ Create New User"):
+with st.expander("Create New User"):
     new_user = st.text_input("New Username")
     new_pass = st.text_input("New Password", type="password")
     new_role = st.selectbox("Role", ["operator", "admin"], index=0)
@@ -61,14 +43,13 @@ with st.expander("➕ Create New User"):
         else:
             users[new_user] = {"password": new_pass, "role": new_role}
             save_users(users)
-            st.success(f"✅ Created user: {new_user} ({new_role})")
+            st.success(f"Created user: {new_user} ({new_role})")
             st.rerun()
 
-with st.expander("📋 View All Users"):
+with st.expander("View All Users"):
     st.table(pd.DataFrame([{"Username": k, "Role": v["role"]} for k, v in users.items()]))
 
-# ---------- Load DB ----------
-st.markdown('<div class="section-title">📦 Inspection Database</div>', unsafe_allow_html=True)
+st.subheader("Inspection Database")
 df = read_inspections(limit=1000)
 
 if df.empty:
@@ -79,8 +60,17 @@ df["dt"] = pd.to_datetime(df["dt"], errors="coerce")
 df = df.dropna(subset=["dt"])
 df["date"] = df["dt"].dt.date
 
-for col in ["source", "defects_json", "batch_no", "fabric_type", "shift", "machine_id",
-            "inspection_id", "severity_score", "avg_confidence"]:
+for col in [
+    "source",
+    "defects_json",
+    "batch_no",
+    "fabric_type",
+    "shift",
+    "machine_id",
+    "inspection_id",
+    "severity_score",
+    "avg_confidence",
+]:
     if col not in df.columns:
         df[col] = ""
 
@@ -99,8 +89,7 @@ for item in df["defects_json"].tolist():
         all_defects.add(k)
 all_defects = sorted(list(all_defects))
 
-# ---------- Filters ----------
-st.markdown('<div class="section-title">🔎 Search & Filter</div>', unsafe_allow_html=True)
+st.subheader("Search & Filter")
 
 c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
 
@@ -151,11 +140,11 @@ elif conf_filter == "Medium (0.5-0.8)":
 elif conf_filter == "High (>0.8)":
     filtered = filtered[pd.to_numeric(filtered["avg_confidence"], errors="coerce") > 0.8]
 
-st.markdown(f'<div class="soft-note">Filtered records: <b>{len(filtered)}</b></div>', unsafe_allow_html=True)
+st.info(f"Filtered records: {len(filtered)}")
 st.dataframe(filtered.drop(columns=["date"], errors="ignore"), use_container_width=True)
 
 st.download_button(
-    "⬇️ Download Filtered CSV",
+    "Download Filtered CSV",
     data=filtered.drop(columns=["date"], errors="ignore").to_csv(index=False).encode("utf-8"),
     file_name="filtered_inspections.csv",
     mime="text/csv",
@@ -163,10 +152,9 @@ st.download_button(
 
 pdf_path = create_dashboard_summary_pdf(filtered)
 with open(pdf_path, "rb") as f:
-    st.download_button("📄 Download Dashboard PDF Summary", data=f, file_name="dashboard_summary.pdf", mime="application/pdf")
+    st.download_button("Download Dashboard PDF Summary", data=f, file_name="dashboard_summary.pdf", mime="application/pdf")
 
-# ---------- Preview ----------
-st.markdown('<div class="section-title">🖼 Preview Saved Images</div>', unsafe_allow_html=True)
+st.subheader("Preview Saved Images")
 if len(filtered) > 0:
     selected_id = st.selectbox("Select Inspection ID to preview", filtered["id"].tolist())
     row = filtered[filtered["id"] == selected_id].iloc[0]
@@ -187,26 +175,21 @@ if len(filtered) > 0:
         else:
             st.warning("Annotated image file not found.")
 
-# ---------- Analytics ----------
-st.markdown('<div class="section-title">📊 Analytics Dashboard</div>', unsafe_allow_html=True)
+st.subheader("Analytics Dashboard")
 
 total_inspections = len(filtered)
 total_defects = int(filtered["total_defects"].sum()) if "total_defects" in filtered.columns else 0
 avg_defects = float(filtered["total_defects"].mean()) if total_inspections > 0 else 0.0
 reject_count = int((filtered["quality_status"] == "REJECT").sum()) if "quality_status" in filtered.columns else 0
+pass_count = int((filtered["quality_status"] == "PASS").sum()) if "quality_status" in filtered.columns else 0
 
 m1, m2, m3, m4 = st.columns(4)
-for col, title, value in [
-    (m1, "Total Inspections", total_inspections),
-    (m2, "Total Defects", total_defects),
-    (m3, "Avg Defects / Fabric", f"{avg_defects:.2f}"),
-    (m4, "Reject Count", reject_count),
-]:
-    with col:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">{title}</div><div class="metric-value">{value}</div></div>', unsafe_allow_html=True)
+m1.metric("Total Inspections", total_inspections)
+m2.metric("Total Defects", total_defects)
+m3.metric("Avg Defects / Fabric", f"{avg_defects:.2f}")
+m4.metric("Reject Count", reject_count)
 
-# Defects Per Day
-st.subheader("📅 Defects Per Day")
+st.subheader("Defects Per Day")
 if len(filtered) > 0 and "total_defects" in filtered.columns:
     per_day = filtered.groupby("date")["total_defects"].sum().reset_index().sort_values("date")
     if len(per_day) >= 2:
@@ -220,16 +203,13 @@ if len(filtered) > 0 and "total_defects" in filtered.columns:
         per_day.columns = ["Date", "Total Defects"]
         st.dataframe(per_day, use_container_width=True)
 
-# Pass vs Reject
-st.subheader("✅ PASS vs ❌ REJECT")
-pass_count = int((filtered["quality_status"] == "PASS").sum()) if "quality_status" in filtered.columns else 0
+st.subheader("PASS vs REJECT")
 status_counts = pd.DataFrame({"Status": ["PASS", "REJECT"], "Count": [pass_count, reject_count]})
 st.bar_chart(status_counts.set_index("Status"))
 with st.expander("View table: PASS / REJECT"):
     st.dataframe(status_counts, use_container_width=True)
 
-# Inspections by Source
-st.subheader("📸 Inspections by Source")
+st.subheader("Inspections by Source")
 if len(filtered) > 0:
     by_source = filtered["source"].value_counts().reset_index()
     by_source.columns = ["Source", "Count"]
@@ -237,8 +217,7 @@ if len(filtered) > 0:
     with st.expander("View table: Inspections by Source"):
         st.dataframe(by_source, use_container_width=True)
 
-# Top defects
-st.subheader("📊 Top Defects (Count)")
+st.subheader("Top Defects (Count)")
 agg = {}
 for item in filtered["defects_json"].tolist():
     d = safe_load_defects(item)
@@ -253,8 +232,7 @@ if agg:
 else:
     st.info("No defect type data available.")
 
-# Operator performance
-st.subheader("👷 Operator Performance")
+st.subheader("Operator Performance")
 if len(filtered) > 0:
     op_df = (
         filtered.groupby("user")
@@ -269,8 +247,7 @@ if len(filtered) > 0:
     with st.expander("View table: Operator Performance"):
         st.dataframe(op_df, use_container_width=True)
 
-# Delete
-st.subheader("🗑 Delete Inspection Record")
+st.subheader("Delete Inspection Record")
 del_id = st.number_input("Enter inspection ID to delete", min_value=0, step=1)
 if st.button("Delete Record"):
     if del_id > 0:
