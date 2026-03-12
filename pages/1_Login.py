@@ -6,6 +6,7 @@ apply_dark_theme()
 
 st.title("🔐 Login")
 
+# Session state initialization
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user = None
@@ -13,10 +14,11 @@ if "logged_in" not in st.session_state:
 
 USERS = load_users()
 
+# Login form
 u = st.text_input("Username")
 p = st.text_input("Password", type="password")
 
-if st.button("Login", use_container_width=True):
+if st.button("Login", use_container_width=True, key="login_btn"):
     if u in USERS and USERS[u]["password"] == p:
         st.session_state.logged_in = True
         st.session_state.user = u
@@ -26,10 +28,11 @@ if st.button("Login", use_container_width=True):
     else:
         st.error("Invalid username/password")
 
+# Show logged user
 if st.session_state.logged_in:
     st.info(f"✅ User: {st.session_state.user} | Role: {st.session_state.role}")
 
-    if st.button("Logout", use_container_width=True):
+    if st.button("Logout", use_container_width=True, key="logout_btn_login"):
         st.session_state.logged_in = False
         st.session_state.user = None
         st.session_state.role = None
