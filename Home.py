@@ -11,39 +11,59 @@ st.set_page_config(
 
 apply_dark_theme()
 
-# Hide Streamlit default multipage navigation
+# Hide default Streamlit navigation
 st.markdown("""
 <style>
+
+/* Hide sidebar navigation */
 [data-testid="stSidebar"] {
-    display: none !important;
+    display: none;
 }
+
 [data-testid="stSidebarNav"] {
-    display: none !important;
+    display: none;
 }
-button[kind="header"] {
-    display: none !important;
-}
+
+/* Remove Streamlit header */
 header {
     visibility: hidden;
 }
+
+/* Remove large padding */
+.block-container {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+}
+
+/* Reduce vertical spacing */
+div[data-testid="stVerticalBlock"] {
+    gap: 0.5rem !important;
+}
+
+/* Top navigation container */
 .top-nav-wrap {
     position: sticky;
     top: 0;
     z-index: 999;
     background: #000000;
-    padding-top: 0.35rem;
-    padding-bottom: 0.35rem;
+    padding: 0.2rem 0.5rem;
     border-bottom: 1px solid #222;
-    margin-bottom: 1rem;
+    margin-bottom: 0.3rem;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
-# session defaults
+
+# ---------------- SESSION ---------------- #
+
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user = None
     st.session_state.role = None
+
+
+# ---------------- TOP NAV ---------------- #
 
 st.markdown('<div class="top-nav-wrap">', unsafe_allow_html=True)
 
@@ -67,8 +87,8 @@ selected = option_menu(
         "gear",
         "robot",
     ],
-    default_index=0,
     orientation="horizontal",
+    default_index=0,
     styles={
         "container": {
             "padding": "0!important",
@@ -82,8 +102,8 @@ selected = option_menu(
             "font-size": "14px",
             "text-align": "center",
             "margin": "2px",
-            "padding": "10px 8px",
-            "border-radius": "8px",
+            "padding": "8px",
+            "border-radius": "6px",
             "background-color": "#111111",
             "color": "#ffffff",
         },
@@ -96,46 +116,58 @@ selected = option_menu(
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# top status row
-left, right = st.columns([3, 1])
+
+# ---------------- HEADER ---------------- #
+
+left, right = st.columns([4, 1])
 
 with left:
     st.markdown("## 🧵 Fabric QC System")
     st.caption("AI-based Fabric Inspection")
 
 with right:
-    if st.session_state.get("logged_in", False):
-        st.success(f"{st.session_state.get('user')} ({st.session_state.get('role')})")
-        if st.button("Logout", use_container_width=True, key="top_logout_btn"):
+    if st.session_state.logged_in:
+        st.success(f"{st.session_state.user} ({st.session_state.role})")
+
+        if st.button("Logout", key="logout_btn"):
             st.session_state.logged_in = False
             st.session_state.user = None
             st.session_state.role = None
             st.rerun()
+
     else:
         st.info("Not logged in")
 
 
-def run_page(path: str):
+# ---------------- PAGE LOADER ---------------- #
+
+def run_page(path):
     if not os.path.exists(path):
         st.error(f"Page not found: {path}")
         return
+
     try:
         with open(path, "r", encoding="utf-8") as f:
             code = f.read()
+
         exec(compile(code, path, "exec"), globals(), globals())
+
     except Exception as e:
         st.error(f"Error loading page: {path}")
         st.exception(e)
 
 
+# ---------------- HOME PAGE ---------------- #
+
 if selected == "Home":
+
     st.markdown("""
     <div class="hero-box">
         <h1>Fabric Defect Detection System</h1>
         <p>
-            AI-powered textile inspection platform for image upload detection,
-            live webcam capture, model analytics, admin monitoring,
-            and fabric assistant support.
+        AI-powered textile inspection platform for image upload detection,
+        live webcam capture, model analytics, admin monitoring,
+        and fabric assistant support.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -147,24 +179,24 @@ if selected == "Home":
     with c1:
         st.markdown("""
         <div class="card-box">
-            <h4>🔐 Login</h4>
-            <p>Admin and operator login with secure access control.</p>
+        <h4>🔐 Login</h4>
+        <p>Admin and operator login with secure access control.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with c2:
         st.markdown("""
         <div class="card-box">
-            <h4>🖼 Image Upload</h4>
-            <p>Upload fabric images and detect defects instantly.</p>
+        <h4>🖼 Image Upload</h4>
+        <p>Upload fabric images and detect defects instantly.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with c3:
         st.markdown("""
         <div class="card-box">
-            <h4>📷 Live Webcam</h4>
-            <p>Capture fabric directly using webcam or mobile camera.</p>
+        <h4>📷 Live Webcam</h4>
+        <p>Capture fabric directly using webcam or mobile camera.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -173,26 +205,29 @@ if selected == "Home":
     with d1:
         st.markdown("""
         <div class="card-box">
-            <h4>📊 Model Metrics</h4>
-            <p>View training results such as precision, recall and mAP.</p>
+        <h4>📊 Model Metrics</h4>
+        <p>View training results such as precision, recall and mAP.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with d2:
         st.markdown("""
         <div class="card-box">
-            <h4>🛠 Admin Dashboard</h4>
-            <p>Monitor inspections, defects, trends and operator performance.</p>
+        <h4>🛠 Admin Dashboard</h4>
+        <p>Monitor inspections, defects, trends and operator performance.</p>
         </div>
         """, unsafe_allow_html=True)
 
     with d3:
         st.markdown("""
         <div class="card-box">
-            <h4>🤖 Fabric Assistant</h4>
-            <p>Ask fabric-related questions using a ChatGPT-style layout.</p>
+        <h4>🤖 Fabric Assistant</h4>
+        <p>Ask fabric-related questions using a ChatGPT-style layout.</p>
         </div>
         """, unsafe_allow_html=True)
+
+
+# ---------------- ROUTING ---------------- #
 
 elif selected == "Login":
     run_page("pages/1_Login.py")
