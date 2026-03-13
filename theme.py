@@ -2,11 +2,12 @@ import streamlit as st
 
 
 def apply_dark_theme():
+
     st.markdown(
         """
         <style>
 
-        /* App background */
+        /* APP BACKGROUND */
         .stApp {
             background-color: #0f0f0f;
             color: #ffffff;
@@ -16,7 +17,7 @@ def apply_dark_theme():
             color: #ffffff;
         }
 
-        /* Sidebar */
+        /* SIDEBAR */
         section[data-testid="stSidebar"] {
             background-color: #000000 !important;
         }
@@ -25,7 +26,7 @@ def apply_dark_theme():
             color: #ffffff !important;
         }
 
-        /* Titles */
+        /* TITLES */
         h1 {
             color: #ff3b3b !important;
             font-weight: 800 !important;
@@ -39,7 +40,7 @@ def apply_dark_theme():
             color: #f3f4f6 !important;
         }
 
-        /* Inputs */
+        /* INPUT BOXES */
         .stTextInput input,
         .stTextArea textarea,
         .stNumberInput input,
@@ -50,14 +51,14 @@ def apply_dark_theme():
             border-radius: 10px !important;
         }
 
-        /* Dropdown SELECT box */
+        /* DROPDOWN SELECT BOX */
         div[data-baseweb="select"] > div {
             background-color: #1a1a1a !important;
-            color: white !important;
+            color: #ffffff !important;
             border: 1px solid #444 !important;
         }
 
-        /* Dropdown menu items */
+        /* DROPDOWN MENU */
         ul[role="listbox"] {
             background-color: #1a1a1a !important;
             color: white !important;
@@ -72,7 +73,7 @@ def apply_dark_theme():
             background-color: #333333 !important;
         }
 
-        /* Buttons */
+        /* BUTTONS */
         .stButton > button {
             background: #ff3b3b !important;
             color: white !important;
@@ -85,7 +86,7 @@ def apply_dark_theme():
             background: #d90429 !important;
         }
 
-        /* Download button FIX */
+        /* DOWNLOAD BUTTON */
         button[kind="secondary"] {
             background-color: #ff3b3b !important;
             color: white !important;
@@ -97,7 +98,38 @@ def apply_dark_theme():
             background-color: #d90429 !important;
         }
 
-        /* Dataframe */
+        /* FILE UPLOADER BOX */
+        [data-testid="stFileUploader"] {
+            background-color: #1a1a1a !important;
+            border: 1px solid #444 !important;
+            border-radius: 12px !important;
+            padding: 15px !important;
+        }
+
+        /* TEXT INSIDE FILE UPLOADER */
+        [data-testid="stFileUploader"] span,
+        [data-testid="stFileUploader"] small,
+        [data-testid="stFileUploader"] label,
+        [data-testid="stFileUploader"] p {
+            color: #ffffff !important;
+        }
+
+        /* DRAG & DROP AREA */
+        [data-testid="stFileUploaderDropzone"] {
+            background-color: #1a1a1a !important;
+            border: 2px dashed #444 !important;
+            color: white !important;
+        }
+
+        /* BROWSE FILE BUTTON */
+        [data-testid="stFileUploader"] button {
+            background-color: #ff3b3b !important;
+            color: white !important;
+            border-radius: 8px !important;
+            border: none !important;
+        }
+
+        /* DATAFRAME */
         div[data-testid="stDataFrame"] * {
             color: white !important;
         }
@@ -106,7 +138,7 @@ def apply_dark_theme():
             color: white !important;
         }
 
-        /* Expander */
+        /* EXPANDER */
         details {
             background: #1a1a1a !important;
             border: 1px solid #333 !important;
@@ -118,7 +150,7 @@ def apply_dark_theme():
             font-weight: 700 !important;
         }
 
-        /* Metric boxes */
+        /* METRICS */
         div[data-testid="stMetric"] {
             background: #1a1a1a !important;
             border: 1px solid #333 !important;
