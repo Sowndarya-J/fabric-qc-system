@@ -6,114 +6,128 @@ from theme import apply_dark_theme
 st.set_page_config(
     page_title="Fabric QC System",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 apply_dark_theme()
 
-# Hide Streamlit default multipage navigation completely
+# Hide Streamlit default multipage navigation
 st.markdown("""
 <style>
+[data-testid="stSidebar"] {
+    display: none !important;
+}
 [data-testid="stSidebarNav"] {
     display: none !important;
 }
-
 button[kind="header"] {
     display: none !important;
 }
-
-section[data-testid="stSidebar"] > div:first-child {
-    padding-top: 0rem !important;
+header {
+    visibility: hidden;
+}
+.top-nav-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    background: #000000;
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid #222;
+    margin-bottom: 1rem;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- SIDEBAR ---------------- #
-with st.sidebar:
+# session defaults
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user = None
+    st.session_state.role = None
+
+st.markdown('<div class="top-nav-wrap">', unsafe_allow_html=True)
+
+selected = option_menu(
+    menu_title=None,
+    options=[
+        "Home",
+        "Login",
+        "Image Upload",
+        "Live Webcam",
+        "Model Metrics",
+        "Admin Dashboard",
+        "Fabric Assistant",
+    ],
+    icons=[
+        "house",
+        "key",
+        "image",
+        "camera-video",
+        "bar-chart",
+        "gear",
+        "robot",
+    ],
+    default_index=0,
+    orientation="horizontal",
+    styles={
+        "container": {
+            "padding": "0!important",
+            "background-color": "#000000",
+        },
+        "icon": {
+            "font-size": "16px",
+            "color": "#ff3b3b",
+        },
+        "nav-link": {
+            "font-size": "14px",
+            "text-align": "center",
+            "margin": "2px",
+            "padding": "10px 8px",
+            "border-radius": "8px",
+            "background-color": "#111111",
+            "color": "#ffffff",
+        },
+        "nav-link-selected": {
+            "background-color": "#ff3b3b",
+            "color": "white",
+        },
+    },
+)
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# top status row
+left, right = st.columns([3, 1])
+
+with left:
     st.markdown("## 🧵 Fabric QC System")
     st.caption("AI-based Fabric Inspection")
 
-    st.markdown("---")
-
-    selected = option_menu(
-        menu_title=None,
-        options=[
-            "Home",
-            "Login",
-            "Image Upload",
-            "Live Webcam",
-            "Model Metrics",
-            "Admin Dashboard",
-            "Fabric Assistant",
-        ],
-        icons=[
-            "house",
-            "key",
-            "image",
-            "camera-video",
-            "bar-chart",
-            "gear",
-            "robot",
-        ],
-        default_index=0,
-        styles={
-            "container": {
-                "padding": "0!important",
-                "background-color": "#000000"
-            },
-            "icon": {
-                "font-size": "18px",
-                "color": "#ff3b3b"
-            },
-            "nav-link": {
-                "font-size": "15px",
-                "text-align": "left",
-                "margin": "5px",
-                "border-radius": "8px",
-                "background-color": "#111111",
-                "color": "#ffffff",
-            },
-            "nav-link-selected": {
-                "background-color": "#ff3b3b",
-                "color": "white",
-            },
-        },
-    )
-
-    st.markdown("---")
-
+with right:
     if st.session_state.get("logged_in", False):
-        user = st.session_state.get("user")
-        role = st.session_state.get("role")
-
-        st.success(f"👤 {user} ({role})")
-
-        if st.button("Logout", use_container_width=True, key="sidebar_logout_btn"):
+        st.success(f"{st.session_state.get('user')} ({st.session_state.get('role')})")
+        if st.button("Logout", use_container_width=True, key="top_logout_btn"):
             st.session_state.logged_in = False
             st.session_state.user = None
             st.session_state.role = None
             st.rerun()
     else:
-        st.info("Please login first")
+        st.info("Not logged in")
 
 
-# ---------------- PAGE LOADER ---------------- #
 def run_page(path: str):
     if not os.path.exists(path):
         st.error(f"Page not found: {path}")
         return
-
     try:
         with open(path, "r", encoding="utf-8") as f:
             code = f.read()
         exec(compile(code, path, "exec"), globals(), globals())
-
     except Exception as e:
         st.error(f"Error loading page: {path}")
         st.exception(e)
 
 
-# ---------------- HOME PAGE ---------------- #
 if selected == "Home":
     st.markdown("""
     <div class="hero-box">
@@ -180,8 +194,6 @@ if selected == "Home":
         </div>
         """, unsafe_allow_html=True)
 
-
-# ---------------- PAGE ROUTING ---------------- #
 elif selected == "Login":
     run_page("pages/1_Login.py")
 
