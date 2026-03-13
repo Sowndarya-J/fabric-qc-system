@@ -26,7 +26,7 @@ except Exception:
 
 apply_dark_theme()
 
-st.title("Live Webcam Detection")
+st.title("📷 Live Webcam Detection")
 init_db()
 
 if not st.session_state.get("logged_in", False):
@@ -52,21 +52,35 @@ def reset_camera_state() -> None:
 if "captured_frame_bgr" not in st.session_state:
     reset_camera_state()
 
-start_camera = st.toggle("Start Camera", value=False)
-
-confidence_threshold = st.slider(
-    "Confidence Threshold",
-    min_value=0.30,
-    max_value=1.00,
-    value=0.60,
-    step=0.05,
+st.markdown(
+    """
+    <div class="soft-box">
+        <b>Tips for a clear mobile camera view:</b><br>
+        • Use the back camera<br>
+        • Keep fabric flat and steady<br>
+        • Use bright white light<br>
+        • Clean the camera lens<br>
+        • Move slightly back if the fabric is too close
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
-c1, c2 = st.columns(2)
+start_camera = st.toggle("Start Camera", value=False)
+
+c1, c2, c3 = st.columns(3)
 with c1:
-    cam_mode = st.selectbox("Camera", ["Back Camera", "Front Camera"], index=0)
+    confidence_threshold = st.slider(
+        "Confidence Threshold",
+        min_value=0.25,
+        max_value=1.00,
+        value=0.35,
+        step=0.05,
+    )
 with c2:
-    webcam_imgsz = st.selectbox("Detection Image Size", [320, 416, 512, 640], index=0)
+    cam_mode = st.selectbox("Camera", ["Back Camera", "Front Camera"], index=0)
+with c3:
+    webcam_imgsz = st.selectbox("Detection Image Size", [320, 416, 512, 640], index=1)
 
 facing_mode = "environment" if cam_mode == "Back Camera" else "user"
 
@@ -102,20 +116,30 @@ if start_camera:
             ]
         },
         async_processing=True,
-        video_html_attrs={"autoPlay": True, "playsInline": True, "muted": True},
+        video_html_attrs={
+            "autoPlay": True,
+            "playsInline": True,
+            "muted": True,
+            "controls": False,
+            "style": {
+                "width": "100%",
+                "height": "auto",
+                "borderRadius": "12px",
+            },
+        },
     )
 else:
     st.info("Turn on Start Camera to preview and capture.")
 
 b1, b2, b3, b4 = st.columns(4)
 with b1:
-    capture_clicked = st.button("Capture", use_container_width=True)
+    capture_clicked = st.button("📸 Capture", use_container_width=True)
 with b2:
-    detect_clicked = st.button("Detect", use_container_width=True)
+    detect_clicked = st.button("🔍 Detect", use_container_width=True)
 with b3:
-    retake_clicked = st.button("Retake", use_container_width=True)
+    retake_clicked = st.button("🔄 Retake", use_container_width=True)
 with b4:
-    save_clicked = st.button("Save Result", use_container_width=True)
+    save_clicked = st.button("💾 Save Result", use_container_width=True)
 
 if retake_clicked:
     reset_camera_state()
