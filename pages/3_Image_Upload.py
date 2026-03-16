@@ -41,11 +41,13 @@ if cv2 is None:
 
 confidence_threshold = st.slider(
     "Confidence Threshold",
-    min_value=0.30,
+    min_value=0.10,
     max_value=1.00,
-    value=0.60,
+    value=0.40,
     step=0.05,
 )
+
+st.write(f"Selected Confidence Threshold: {confidence_threshold:.2f}")
 
 uploaded_file = st.file_uploader("Upload Fabric Image", type=["jpg", "png", "jpeg"])
 
@@ -193,7 +195,11 @@ if uploaded_file is not None:
 
         with st.expander("Email Report", expanded=False):
             sender_email = st.text_input("Sender Gmail", value=st.secrets.get("SENDER_EMAIL", ""))
-            app_password = st.text_input("Gmail App Password", value=st.secrets.get("APP_PASSWORD", ""), type="password")
+            app_password = st.text_input(
+                "Gmail App Password",
+                value=st.secrets.get("APP_PASSWORD", ""),
+                type="password",
+            )
             receiver_email = st.text_input("Receiver Email", value=st.secrets.get("RECEIVER_EMAIL", ""))
 
             if st.button("Send Email", use_container_width=True):
@@ -203,7 +209,11 @@ if uploaded_file is not None:
                         app_password=app_password.strip(),
                         receiver_email=receiver_email.strip(),
                         subject=f"Fabric Report - {inspection_id}",
-                        body=f"Inspection ID: {inspection_id}\nStatus: {quality_status}\nRecommendations: {recommendations}",
+                        body=(
+                            f"Inspection ID: {inspection_id}\n"
+                            f"Status: {quality_status}\n"
+                            f"Recommendations: {recommendations}"
+                        ),
                         pdf_path=pdf_path,
                     )
                     st.success("Email sent successfully!")
