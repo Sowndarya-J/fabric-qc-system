@@ -1,0 +1,11 @@
+# Fabric Defect Dataset
+path: ./fabric_dataset
+train: images/train
+val: images/valid
+test: images/test
+
+# Number of classes
+nc: 5
+
+# Class names
+names: ['hole', 'stain', 'tear', 'discoloration', 'weaving_defect']
