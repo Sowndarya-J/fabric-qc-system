@@ -47,10 +47,46 @@ def save_users(users_dict):
         json.dump(users_dict, f, indent=2)
 
 
+def check_login(username: str, password: str) -> bool:
+    """Check if username and password are valid."""
+    users = load_users()
+    if username in users and users[username].get("password") == password:
+        return True
+    return False
+
+
+def get_role(username: str) -> str:
+    """Get the role of a user."""
+    users = load_users()
+    if username in users:
+        return users[username].get("role", "user")
+    return "user"
+
+
 @st.cache_resource
 def get_model():
-    from ultralytics import YOLO
-    return YOLO("best.pt")
+    """Load YOLO model. Uses best.pt if available, falls back to yolov8n.pt"""
+    try:
+        from ultralytics import YOLO
+        
+        # Try loading custom trained model
+        if os.path.exists("best.pt"):
+            print("Loading custom model: best.pt")
+            return YOLO("best.pt")
+        
+        # Fallback to pre-trained model
+        print("best.pt not found, loading pre-trained yolov8n.pt")
+        if os.path.exists("yolov8n.pt"):
+            return YOLO("yolov8n.pt")
+        
+        # Download if neither exists
+        print("Downloading yolov8n model...")
+        return YOLO("yolov8n.pt")
+        
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        raise Exception(f"Failed to load YOLO model: {str(e)}")
+
 
 
 def _column_exists(cur, table_name, column_name):
