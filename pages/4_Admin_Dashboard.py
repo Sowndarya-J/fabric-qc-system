@@ -3,10 +3,7 @@ import json
 import streamlit as st
 import pandas as pd
 
-from theme import apply_dark_theme
 from utils import read_inspections, delete_inspection, load_users, save_users
-
-apply_dark_theme()
 
 st.title("🛠 Admin Dashboard")
 
@@ -75,14 +72,14 @@ if "defects_json" not in db_df.columns:
     db_df["defects_json"] = "{}"
 
 # -----------------------------
-# BUILD DEFECT LIST
+# BUILD DEFECT LIST (for filter + analytics)
 # -----------------------------
 def safe_load_defects(s):
     try:
         if s is None or str(s).strip() == "":
             return {}
         return json.loads(s)
-    except Exception:
+    except:
         return {}
 
 all_defects = set()
@@ -138,6 +135,7 @@ if selected_status != "All":
 if selected_source != "All":
     filtered = filtered[filtered["source"].astype(str) == selected_source]
 
+# Defect filter
 if selected_defect != "All":
     def has_defect(x):
         d = safe_load_defects(x)
@@ -147,7 +145,7 @@ if selected_defect != "All":
 st.write(f"✅ Filtered records: **{len(filtered)}**")
 
 show_df = filtered.drop(columns=["date"])
-st.dataframe(show_df, use_container_width=True)
+st.dataframe(show_df, width="stretch")
 
 st.download_button(
     "⬇️ Download Filtered CSV",
@@ -229,15 +227,9 @@ per_day = (
     .sum()
     .reset_index()
     .sort_values("date")
+    .set_index("date")
 )
-
-if len(per_day) >= 2:
-    chart_df = per_day.copy()
-    chart_df["date"] = pd.to_datetime(chart_df["date"])
-    chart_df = chart_df.set_index("date")
-    st.line_chart(chart_df["total_defects"])
-else:
-    st.bar_chart(per_day.set_index("date")["total_defects"])
+st.line_chart(per_day)
 
 st.subheader("✅ PASS vs ❌ REJECT")
 status_counts = (
@@ -252,6 +244,7 @@ st.subheader("📸 Inspections by Source")
 by_source = filtered["source"].value_counts().to_frame("count")
 st.bar_chart(by_source)
 
+# -------- Most common defect + Top defects chart --------
 st.subheader("⭐ Most Common Defect Type")
 
 agg = {}
